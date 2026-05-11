@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,6 +11,8 @@ const schema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+const REMEMBER_KEY = 'pms_remember_me';
+
 export default function Login() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -18,16 +20,35 @@ export default function Login() {
   const [lockoutMsg, setLockoutMsg]   = useState('');
   const [loading, setLoading]         = useState(false);
   const [showPw, setShowPw]           = useState(false);
+  const [rememberMe, setRememberMe]   = useState(false);
+
+  // Forgot password modal state
+  const [showForgot, setShowForgot]       = useState(false);
+  const [forgotUsername, setForgotUsername] = useState('');
+  const [forgotStatus, setForgotStatus]   = useState(null); // 'success' | 'error'
+  const [forgotMsg, setForgotMsg]         = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const { register, handleSubmit, setValue, clearErrors, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
   });
+
+  // Restore remembered username on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(REMEMBER_KEY);
+    if (saved) {
+      setValue('username', saved);
+      setRememberMe(true);
+    }
+  }, [setValue]);
 
   const onSubmit = async (data) => {
     setServerError(''); setLockoutMsg(''); setLoading(true);
     try {
       const res = await api.post('/api/auth/login', data);
       const { token, user } = res.data;
+      if (rememberMe) localStorage.setItem(REMEMBER_KEY, data.username);
+      else localStorage.removeItem(REMEMBER_KEY);
       setAuth(token, user);
       navigate(user.role === 'OPERATOR' ? '/operator' : '/attendant', { replace: true });
     } catch (err) {
@@ -37,6 +58,27 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotUsername.trim()) {
+      setForgotStatus('error'); setForgotMsg('Please enter your username.'); return;
+    }
+    setForgotLoading(true); setForgotStatus(null);
+    try {
+      await api.post('/api/auth/forgot-password', { username: forgotUsername.trim() });
+      setForgotStatus('success');
+      setForgotMsg('If that username exists, a password reset link has been sent to the associated email.');
+    } catch (err) {
+      setForgotStatus('error');
+      setForgotMsg(err.response?.data?.message || 'Something went wrong. Please try again.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const closeForgot = () => {
+    setShowForgot(false); setForgotUsername(''); setForgotStatus(null); setForgotMsg('');
   };
 
   const fillCreds = (username, password) => {
@@ -160,6 +202,24 @@ export default function Login() {
             {errors.password && <span className="form-error">{errors.password.message}</span>}
           </div>
 
+          {/* Remember Me + Forgot Password row */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:'var(--space-2)', cursor:'pointer', fontSize:'var(--text-sm)', color:'var(--gray-600)', userSelect:'none' }}>
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                style={{ width:16, height:16, accentColor:'var(--brand-primary)', cursor:'pointer' }}
+              />
+              Remember me
+            </label>
+            <button type="button"
+              onClick={() => { setShowForgot(true); setForgotUsername(''); setForgotStatus(null); setForgotMsg(''); }}
+              style={{ background:'none', border:'none', padding:0, fontSize:'var(--text-sm)', color:'var(--brand-primary)', cursor:'pointer', fontWeight:'var(--weight-medium)' }}>
+              Forgot password?
+            </button>
+          </div>
+
           {/* Submit */}
           <button type="submit" disabled={loading} className="btn btn-primary btn-lg btn-block">
             {loading
@@ -196,6 +256,71 @@ export default function Login() {
           Lugogo Mall Parking Management System &copy; 2025
         </div>
       </div>
+
+      {/* ── Forgot Password Modal ── */}
+      {showForgot && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}
+          onClick={e => { if (e.target === e.currentTarget) closeForgot(); }}>
+          <div style={{ background:'var(--surface-card)', borderRadius:'var(--radius-xl)', padding:'var(--space-8)', width:420, boxShadow:'0 20px 60px rgba(0,0,0,0.2)', position:'relative' }}>
+
+            {/* Close */}
+            <button onClick={closeForgot} style={{ position:'absolute', top:'var(--space-4)', right:'var(--space-4)', background:'none', border:'none', cursor:'pointer', color:'var(--gray-400)', padding:4 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+
+            {/* Icon */}
+            <div style={{ width:48, height:48, background:'rgba(26,86,219,0.1)', borderRadius:'var(--radius-xl)', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:'var(--space-4)' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+
+            <h3 style={{ fontSize:'var(--text-xl)', fontWeight:'var(--weight-bold)', color:'var(--gray-900)', marginBottom:'var(--space-1)' }}>Reset Password</h3>
+            <p style={{ fontSize:'var(--text-sm)', color:'var(--gray-500)', marginBottom:'var(--space-5)' }}>Enter your username and we'll send a reset link to the associated email.</p>
+
+            {/* Feedback */}
+            {forgotStatus === 'success' && (
+              <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:'var(--radius-lg)', padding:'var(--space-3) var(--space-4)', fontSize:'var(--text-sm)', color:'#166534', display:'flex', gap:'var(--space-2)', alignItems:'flex-start', marginBottom:'var(--space-4)' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink:0, marginTop:1 }}><polyline points="20 6 9 17 4 12"/></svg>
+                {forgotMsg}
+              </div>
+            )}
+            {forgotStatus === 'error' && (
+              <div style={{ background:'var(--color-occupied-lt)', border:'1px solid #fca5a5', borderRadius:'var(--radius-lg)', padding:'var(--space-3) var(--space-4)', fontSize:'var(--text-sm)', color:'#991b1b', display:'flex', gap:'var(--space-2)', alignItems:'center', marginBottom:'var(--space-4)' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                {forgotMsg}
+              </div>
+            )}
+
+            {forgotStatus !== 'success' && (
+              <>
+                <div className="form-group" style={{ marginBottom:'var(--space-4)' }}>
+                  <label className="form-label">Username</label>
+                  <div className="input-wrapper">
+                    <svg className="input-icon-left" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <input
+                      type="text" value={forgotUsername}
+                      onChange={e => { setForgotUsername(e.target.value); setForgotStatus(null); }}
+                      onKeyDown={e => e.key === 'Enter' && handleForgotPassword()}
+                      placeholder="Enter your username"
+                      className="input has-icon-left"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <button onClick={handleForgotPassword} disabled={forgotLoading}
+                  className="btn btn-primary btn-lg btn-block">
+                  {forgotLoading ? <><span className="btn-spinner" /> Sending...</> : 'Send Reset Link'}
+                </button>
+              </>
+            )}
+
+            {forgotStatus === 'success' && (
+              <button onClick={closeForgot} className="btn btn-primary btn-lg btn-block">Back to Sign In</button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Hide left panel on small screens */}
       <style>{`.login-left { display: flex; } @media(max-width:900px){ .login-left{ display:none; } }`}</style>
