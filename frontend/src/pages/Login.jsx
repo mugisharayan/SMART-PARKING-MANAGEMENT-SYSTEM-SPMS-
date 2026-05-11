@@ -113,15 +113,15 @@ export default function Login() {
             </svg>
           </div>
           <div>
-            <div style={{ fontSize:'var(--text-xl)', fontWeight:'var(--weight-bold)', color:'#fff', letterSpacing:'-0.02em' }}>Lugogo Mall PMS</div>
-            <div style={{ fontSize:'var(--text-xs)', color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Parking Management System</div>
+            <div style={{ fontSize:'var(--text-xl)', fontWeight:'var(--weight-bold)', color:'#fff', letterSpacing:'-0.02em' }}>Smart Parking Management System</div>
+            <div style={{ fontSize:'var(--text-xs)', color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:'0.1em' }}>SPMS</div>
           </div>
         </div>
 
         {/* Hero */}
         <div style={{ position:'relative', zIndex:1 }}>
           <h1 style={{ fontSize:'2.75rem', fontWeight:'var(--weight-extrabold)', color:'#fff', lineHeight:1.15, letterSpacing:'-0.03em', marginBottom:'var(--space-4)' }}>
-            Smart Parking<br/>for <span style={{ color:'var(--brand-accent)' }}>Lugogo Mall</span>
+            Smart Parking<br/>Management <span style={{ color:'var(--brand-accent)' }}>System</span>
           </h1>
           <p style={{ fontSize:'var(--text-base)', color:'rgba(255,255,255,0.6)', lineHeight:'var(--leading-relaxed)', maxWidth:380 }}>
             Real-time slot management, automatic plate capture, and instant driver notifications — all in one system.
@@ -144,7 +144,7 @@ export default function Login() {
 
         <div style={{ marginBottom:'var(--space-8)' }}>
           <h2 style={{ fontSize:'var(--text-3xl)', fontWeight:'var(--weight-extrabold)', color:'var(--gray-900)', letterSpacing:'-0.03em', marginBottom:'var(--space-2)' }}>Welcome back</h2>
-          <p style={{ fontSize:'var(--text-sm)', color:'var(--gray-500)' }}>Sign in to access the Parking Management System</p>
+          <p style={{ fontSize:'var(--text-sm)', color:'var(--gray-500)' }}>Sign in to access the Smart Parking Management System</p>
         </div>
 
         {/* Server error */}
@@ -253,7 +253,7 @@ export default function Login() {
         </div>
 
         <div style={{ marginTop:'var(--space-6)', textAlign:'center', fontSize:'var(--text-xs)', color:'var(--gray-400)' }}>
-          Lugogo Mall Parking Management System &copy; 2025
+          Smart Parking Management System &copy; 2025
         </div>
       </div>
 
