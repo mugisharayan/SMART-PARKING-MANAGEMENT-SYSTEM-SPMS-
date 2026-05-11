@@ -94,8 +94,8 @@ export default function Login() {
 
       {/* ── Left panel ── */}
       <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-        padding: 'var(--space-12)', position: 'relative', overflow: 'hidden',
+        flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        padding: '48px 52px', position: 'relative', overflow: 'hidden', gap: 36,
       }} className="login-left">
 
         {/* Background video */}
@@ -104,40 +104,92 @@ export default function Login() {
           src={parkingBg}
         />
         {/* Dark overlay */}
-        <div style={{ position:'absolute', inset:0, background:'linear-gradient(160deg, rgba(15,23,42,0.82) 0%, rgba(15,42,74,0.75) 55%, rgba(15,23,42,0.85) 100%)', zIndex:1 }} />
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(170deg, rgba(10,15,30,0.88) 0%, rgba(15,42,74,0.80) 60%, rgba(10,15,30,0.92) 100%)', zIndex:1 }} />
 
-        {/* Brand */}
-        <div style={{ position:'relative', zIndex:2, display:'flex', alignItems:'center', gap:'var(--space-3)' }}>
-          <div style={{ width:48, height:48, background:'var(--brand-primary)', borderRadius:'var(--radius-xl)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 20px rgba(26,86,219,0.5)' }}>
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2">
-              <rect x="1" y="3" width="15" height="13" rx="2"/>
-              <path d="M16 8h4l3 3v5h-7V8z"/>
-              <circle cx="5.5" cy="18.5" r="2.5"/>
-              <circle cx="18.5" cy="18.5" r="2.5"/>
+        {/* ── Logo ── */}
+        <div style={{ position:'relative', zIndex:2, display:'flex', alignItems:'center', gap:16 }}>
+          <div style={{ position:'relative', width:62, height:62, flexShrink:0 }}>
+            <svg width="62" height="62" viewBox="0 0 62 62" fill="none">
+              <defs>
+                <linearGradient id="lgGrad" x1="0" y1="0" x2="62" y2="62" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#1e3a8a"/>
+                  <stop offset="100%" stopColor="#0f172a"/>
+                </linearGradient>
+              </defs>
+              <circle cx="31" cy="31" r="30" stroke="rgba(212,175,55,0.5)" strokeWidth="1.8"/>
+              <circle cx="31" cy="31" r="27" fill="url(#lgGrad)"/>
+              <rect x="13" y="28" width="36" height="16" rx="1.5" fill="rgba(255,255,255,0.1)" stroke="rgba(212,175,55,0.6)" strokeWidth="1"/>
+              <rect x="14" y="20" width="10" height="24" rx="1" fill="rgba(255,255,255,0.12)" stroke="rgba(212,175,55,0.5)" strokeWidth="1"/>
+              <rect x="38" y="20" width="10" height="24" rx="1" fill="rgba(255,255,255,0.12)" stroke="rgba(212,175,55,0.5)" strokeWidth="1"/>
+              <path d="M26 44 L26 36 Q31 31 36 36 L36 44Z" fill="rgba(212,175,55,0.2)" stroke="rgba(212,175,55,0.6)" strokeWidth="0.8"/>
+              <text x="16.5" y="32" fontFamily="Inter,sans-serif" fontSize="8" fontWeight="900" fill="#D4AF37">P</text>
+              <text x="40.5" y="32" fontFamily="Inter,sans-serif" fontSize="8" fontWeight="900" fill="#D4AF37">P</text>
+              <line x1="13" y1="28" x2="49" y2="28" stroke="#D4AF37" strokeWidth="1.5"/>
+              <circle cx="31" cy="15" r="3.5" fill="#D4AF37" stroke="rgba(255,255,255,0.3)" strokeWidth="1"/>
+              <line x1="31" y1="18.5" x2="31" y2="22" stroke="#D4AF37" strokeWidth="1.2"/>
             </svg>
+            <span style={{ position:'absolute', top:1, right:1, width:11, height:11, borderRadius:'50%', background:'#4ade80', border:'2px solid rgba(15,23,42,0.9)', boxShadow:'0 0 10px #4ade80', animation:'livePulse 2s ease-in-out infinite' }} />
           </div>
           <div>
-            <div style={{ fontSize:'var(--text-xl)', fontWeight:'var(--weight-bold)', color:'#fff', letterSpacing:'-0.02em' }}>Smart Parking Management System</div>
-            <div style={{ fontSize:'var(--text-xs)', color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:'0.1em' }}>SPMS</div>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
+              <span style={{ fontSize:'1.35rem', fontWeight:900, color:'#D4AF37', letterSpacing:'0.04em', lineHeight:1, textShadow:'0 0 20px rgba(212,175,55,0.4)' }}>LUGOGO</span>
+              <span style={{ width:1, height:18, background:'rgba(212,175,55,0.4)', display:'inline-block' }} />
+              <span style={{ fontSize:'1.1rem', fontWeight:300, color:'rgba(255,255,255,0.75)', letterSpacing:'0.08em', lineHeight:1 }}>SPMS</span>
+            </div>
+            <div style={{ fontSize:'0.65rem', color:'rgba(212,175,55,0.6)', letterSpacing:'0.2em', textTransform:'uppercase', fontWeight:600 }}>Smart Parking Management System</div>
           </div>
         </div>
 
-        {/* Hero */}
-        <div style={{ position:'relative', zIndex:2 }}>
-          <h1 style={{ fontSize:'2.75rem', fontWeight:'var(--weight-extrabold)', color:'#fff', lineHeight:1.15, letterSpacing:'-0.03em', marginBottom:'var(--space-4)' }}>
-            Smart Parking<br/>Management <span style={{ color:'var(--brand-accent)' }}>System</span>
-          </h1>
-          <p style={{ fontSize:'var(--text-base)', color:'rgba(255,255,255,0.6)', lineHeight:'var(--leading-relaxed)', maxWidth:380 }}>
-            Real-time slot management, automatic plate capture, and instant driver notifications — all in one system.
+        {/* ── Hero Content ── */}
+        <div style={{ position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:18 }}>
+
+          {/* Eyebrow tag */}
+          <div style={{ display:'inline-flex', alignSelf:'flex-start', alignItems:'center', gap:8, background:'rgba(212,175,55,0.08)', border:'1px solid rgba(212,175,55,0.35)', borderRadius:100, padding:'6px 18px' }}>
+            <span style={{ width:6, height:6, borderRadius:'50%', background:'#4ade80', boxShadow:'0 0 8px #4ade80', flexShrink:0, animation:'livePulse 2s ease-in-out infinite' }} />
+            <span style={{ fontSize:'0.68rem', fontWeight:700, color:'#D4AF37', letterSpacing:'0.16em', textTransform:'uppercase' }}>Lugogo Mall · Kampala, Uganda</span>
+          </div>
+
+          {/* Main heading */}
+          <div>
+            <div style={{ fontSize:'0.78rem', fontWeight:400, color:'rgba(255,255,255,0.5)', letterSpacing:'0.22em', textTransform:'uppercase', marginBottom:8 }}>Welcome to</div>
+            <h1 style={{ margin:0, padding:0, lineHeight:1.1 }}>
+              <span style={{ display:'block', fontSize:'2.6rem', fontWeight:900, color:'#ffffff', letterSpacing:'-0.02em' }}>Lugogo Smart</span>
+              <span style={{ display:'block', fontSize:'2.6rem', fontWeight:900, letterSpacing:'-0.02em', background:'linear-gradient(95deg, #D4AF37 0%, #FDE68A 45%, #D4AF37 75%, #B8860B 100%)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Parking System</span>
+            </h1>
+          </div>
+
+          {/* Sub text */}
+          <p style={{ margin:0, fontSize:'0.88rem', color:'rgba(255,255,255,0.62)', lineHeight:1.9, maxWidth:400, fontWeight:400, borderLeft:'2px solid rgba(212,175,55,0.45)', paddingLeft:14 }}>
+            Full command over slot availability, vehicle entry, automated plate recognition and real-time monitoring — all from one screen.
           </p>
+
+          {/* Feature rows */}
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {[
+              { color:'#D4AF37', icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, label:'Real-time slot visibility across all zones' },
+              { color:'#60a5fa', icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/></svg>, label:'Automated number plate recognition' },
+              { color:'#34d399', icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, label:'Instant driver & operator notifications' },
+              { color:'#a78bfa', icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, label:'Live analytics & occupancy reports' },
+            ].map(({ color, icon, label }) => (
+              <div key={label} style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ width:30, height:30, borderRadius:8, background:`${color}18`, border:`1px solid ${color}40`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{icon}</div>
+                <span style={{ fontSize:'0.83rem', color:'rgba(255,255,255,0.82)', fontWeight:500 }}>{label}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Stats */}
-        <div style={{ position:'relative', zIndex:2, display:'flex', gap:'var(--space-6)' }}>
-          {[['30','Total Slots'],['5','Zones'],['2','Entry Gates'],['24/7','Monitoring']].map(([val, label]) => (
-            <div key={label}>
-              <div style={{ fontSize:'var(--text-2xl)', fontWeight:'var(--weight-extrabold)', color:'#fff', letterSpacing:'-0.03em' }}>{val}</div>
-              <div style={{ fontSize:'var(--text-xs)', color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.08em' }}>{label}</div>
+        {/* ── Stats bar ── */}
+        <div style={{ position:'relative', zIndex:2, display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:1, background:'rgba(212,175,55,0.15)', border:'1px solid rgba(212,175,55,0.25)', borderRadius:16, overflow:'hidden', backdropFilter:'blur(12px)' }}>
+          {[
+            { val:'30',   label:'Total Slots', color:'#D4AF37' },
+            { val:'5',    label:'Zones',       color:'#60a5fa' },
+            { val:'2',    label:'Entry Gates', color:'#34d399' },
+            { val:'24/7', label:'Uptime',      color:'#a78bfa' },
+          ].map(({ val, label, color }, i) => (
+            <div key={label} style={{ textAlign:'center', padding:'16px 8px', background:'rgba(10,18,40,0.55)', borderRight: i < 3 ? '1px solid rgba(212,175,55,0.15)' : 'none' }}>
+              <div style={{ fontSize:'1.8rem', fontWeight:900, color, letterSpacing:'-0.04em', lineHeight:1, textShadow:`0 0 16px ${color}60` }}>{val}</div>
+              <div style={{ fontSize:'0.6rem', color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.14em', marginTop:7, fontWeight:700 }}>{label}</div>
             </div>
           ))}
         </div>
@@ -326,8 +378,11 @@ export default function Login() {
         </div>
       )}
 
-      {/* Hide left panel on small screens */}
-      <style>{`.login-left { display: flex; } @media(max-width:900px){ .login-left{ display:none; } }`}</style>
+      <style>{`
+        .login-left { display: flex; }
+        @media(max-width:960px){ .login-left{ display:none; } }
+        @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.3)} }
+      `}</style>
     </div>
   );
 }
