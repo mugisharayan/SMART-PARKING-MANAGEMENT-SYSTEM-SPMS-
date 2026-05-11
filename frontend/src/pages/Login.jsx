@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import parkingBg from '../parking-bg.mp4';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -95,15 +96,18 @@ export default function Login() {
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         padding: 'var(--space-12)', position: 'relative', overflow: 'hidden',
-        background: 'linear-gradient(145deg, #0f172a 0%, #1e3a5f 50%, #1a56db 100%)'
       }} className="login-left">
 
-        {/* Decorative circles */}
-        <div style={{ position:'absolute', width:600, height:600, borderRadius:'50%', background:'rgba(26,86,219,0.15)', top:-200, right:-200 }} />
-        <div style={{ position:'absolute', width:400, height:400, borderRadius:'50%', background:'rgba(255,255,255,0.04)', bottom:-100, left:-100 }} />
+        {/* Background video */}
+        <video autoPlay muted loop playsInline
+          style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', zIndex:0 }}
+          src={parkingBg}
+        />
+        {/* Dark overlay */}
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(160deg, rgba(15,23,42,0.82) 0%, rgba(15,42,74,0.75) 55%, rgba(15,23,42,0.85) 100%)', zIndex:1 }} />
 
         {/* Brand */}
-        <div style={{ position:'relative', zIndex:1, display:'flex', alignItems:'center', gap:'var(--space-3)' }}>
+        <div style={{ position:'relative', zIndex:2, display:'flex', alignItems:'center', gap:'var(--space-3)' }}>
           <div style={{ width:48, height:48, background:'var(--brand-primary)', borderRadius:'var(--radius-xl)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 20px rgba(26,86,219,0.5)' }}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2">
               <rect x="1" y="3" width="15" height="13" rx="2"/>
@@ -119,7 +123,7 @@ export default function Login() {
         </div>
 
         {/* Hero */}
-        <div style={{ position:'relative', zIndex:1 }}>
+        <div style={{ position:'relative', zIndex:2 }}>
           <h1 style={{ fontSize:'2.75rem', fontWeight:'var(--weight-extrabold)', color:'#fff', lineHeight:1.15, letterSpacing:'-0.03em', marginBottom:'var(--space-4)' }}>
             Smart Parking<br/>Management <span style={{ color:'var(--brand-accent)' }}>System</span>
           </h1>
@@ -129,7 +133,7 @@ export default function Login() {
         </div>
 
         {/* Stats */}
-        <div style={{ position:'relative', zIndex:1, display:'flex', gap:'var(--space-6)' }}>
+        <div style={{ position:'relative', zIndex:2, display:'flex', gap:'var(--space-6)' }}>
           {[['30','Total Slots'],['5','Zones'],['2','Entry Gates'],['24/7','Monitoring']].map(([val, label]) => (
             <div key={label}>
               <div style={{ fontSize:'var(--text-2xl)', fontWeight:'var(--weight-extrabold)', color:'#fff', letterSpacing:'-0.03em' }}>{val}</div>
