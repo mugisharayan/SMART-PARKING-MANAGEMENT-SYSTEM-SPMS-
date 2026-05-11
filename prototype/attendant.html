@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attendant — Lugogo Mall PMS</title>
+  <link rel="stylesheet" href="shared.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    /* ── Map tab fills viewport ── */
+    #tab-map { padding: 0; position: relative; }
+    .map-shell {
+      position: relative;
+      height: calc(100vh - var(--topbar-height));
+      overflow: hidden;
+    }
+    #parking-map {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    /* Floating panel */
+    .map-float-panel {
+      position: absolute;
+      top: var(--space-4);
+      right: var(--space-4);
+      width: 272px;
+      background: rgba(255,255,255,0.93);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-radius: var(--radius-2xl);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.06);
+      z-index: 10;
+      overflow: hidden;
+      transition: transform var(--transition-base), opacity var(--transition-base);
+    }
+    .map-float-panel.collapsed .map-float-body { display: none; }
+    .map-float-panel.collapsed { width: auto; }
+
+    .map-float-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid rgba(0,0,0,0.07);
+      background: rgba(255,255,255,0.6);
+    }
+    .map-float-title {
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
+      color: var(--gray-900);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .map-float-body {
+      padding: var(--space-4);
+      max-height: calc(100vh - var(--topbar-height) - 120px);
+      overflow-y: auto;
+    }
+
+    /* Floating stats row */
+    .map-stats-row {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+    }
+    .map-stat-mini {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-lg);
+      padding: var(--space-2) var(--space-2);
+      text-align: center;
+    }
+    .map-stat-mini-value {
+      font-size: var(--text-xl);
+      font-weight: var(--weight-extrabold);
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+    .map-stat-mini-label {
+      font-size: 0.6rem;
+      font-weight: var(--weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--gray-500);
+      margin-top: 2px;
+    }
+    .map-stat-mini.available .map-stat-mini-value { color: var(--color-available); }
+    .map-stat-mini.occupied  .map-stat-mini-value { color: var(--color-occupied); }
+    .map-stat-mini.total     .map-stat-mini-value { color: var(--brand-primary); }
+
+    /* Slot detail panel inside float */
+    .slot-detail-panel {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-lg);
+      padding: var(--space-3);
+      animation: slideUp var(--transition-base);
+      margin-bottom: var(--space-3);
+    }
+    .slot-detail-panel.hidden { display: none; }
+    .slot-detail-title {
+      font-size: var(--text-xs);
+      font-weight: var(--weight-semibold);
+      color: var(--gray-900);
+      margin-bottom: var(--space-2);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .slot-detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid var(--gray-200);
+      font-size: var(--text-xs);
+    }
+    .slot-detail-row:last-child { border-bottom: none; }
+    .slot-detail-key   { color: var(--gray-500); font-weight: var(--weight-medium); }
+    .slot-detail-value { color: var(--gray-900); font-weight: var(--weight-semibold); text-align: right; max-width: 150px; }
+
+    /* Map legend */
+    .map-legend {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      color: var(--gray-600);
+    }
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .legend-dot.available { background: var(--color-available); }
+    .legend-dot.occupied  { background: var(--color-occupied); }
+    .legend-dot.oos       { background: var(--color-oos); }
+
+    /* Floating search box top-left */
+    .map-search-float {
+      position: absolute;
+      top: var(--space-4);
+      left: var(--space-4);
+      z-index: 10;
+      display: flex;
+      gap: var(--space-2);
+      align-items: center;
+    }
+    .map-search-input {
+      width: 220px;
+      padding: 0.5rem var(--space-3) 0.5rem 2.2rem;
+      font-size: var(--text-sm);
+      background: rgba(255,255,255,0.93);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1.5px solid rgba(0,0,0,0.1);
+      border-radius: var(--radius-full);
+      outline: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+      transition: all var(--transition-fast);
+      font-family: var(--font-sans);
+    }
+    .map-search-input:focus {
+      border-color: var(--brand-primary);
+      box-shadow: 0 4px 16px rgba(26,86,219,0.2);
+      width: 260px;
+    }
+    .map-search-icon {
+      position: absolute;
+      left: var(--space-3);
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray-400);
+      pointer-events: none;
+    }
+
+    /* Floating parking full banner inside map */
+    .map-parking-full-banner {
+      position: absolute;
+      bottom: var(--space-4);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      color: #fff;
+      padding: var(--space-3) var(--space-6);
+      border-radius: var(--radius-full);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-bold);
+      box-shadow: 0 4px 20px rgba(220,38,38,0.45);
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      animation: slideUp var(--transition-base);
+      white-space: nowrap;
+    }
+    .map-parking-full-banner.hidden { display: none; }
+
+    /* Collapse toggle */
+    .panel-toggle {
+      width: 26px; height: 26px;
+      border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      background: var(--gray-100);
+      border: none;
+      cursor: pointer;
+      color: var(--gray-500);
+      transition: all var(--transition-fast);
+      flex-shrink: 0;
+    }
+    .panel-toggle:hover { background: var(--gray-200); color: var(--gray-700); }
+
+    /* Occupancy bar */
+    .occ-bar-wrap {
+      margin-bottom: var(--space-3);
+    }
+    .occ-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: var(--text-xs);
+      color: var(--gray-500);
+      margin-bottom: 4px;
+    }
+    .occ-bar {
+      height: 6px;
+      background: var(--gray-200);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+    .occ-bar-fill {
+      height: 100%;
+      border-radius: var(--radius-full);
+      transition: width 0.6s ease;
+    }
+
+    /* ── Entry / Exit / History tabs ── */
+    .tab-content-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: var(--space-6);
+    }
+
+    /* Notification options */
+    .notify-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-3);
+      margin-top: var(--space-4);
+    }
+    .notify-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-4);
+      border-radius: var(--radius-xl);
+      border: 2px solid var(--gray-200);
+      background: var(--surface-card);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
+      color: var(--gray-700);
+    }
+    .notify-btn:hover { border-color: var(--brand-primary); color: var(--brand-primary); background: var(--brand-primary-lt); }
+    .notify-btn.whatsapp:hover { border-color: #25d366; color: #25d366; background: #f0fdf4; }
+    .notify-btn svg { width: 28px; height: 28px; }
+
+    /* Barrier animation */
+    .barrier-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: var(--space-6);
+      background: var(--gray-50);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--gray-200);
+      margin: var(--space-4) 0;
+    }
+    .barrier-gate {
+      display: flex;
+      align-items: flex-end;
+      gap: 0;
+      margin-bottom: var(--space-3);
+    }
+    .barrier-post-el {
+      width: 14px; height: 56px;
+      background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    }
+    .barrier-arm-el {
+      width: 160px; height: 10px;
+      background: repeating-linear-gradient(90deg, #dc2626 0px, #dc2626 20px, #ffffff 20px, #ffffff 40px);
+      border-radius: 0 var(--radius-full) var(--radius-full) 0;
+      transform-origin: left center;
+      transition: transform 0.9s cubic-bezier(0.34,1.56,0.64,1);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 23px;
+    }
+    .barrier-arm-el.open { transform: rotate(-88deg); }
+    .barrier-road {
+      width: 200px; height: 8px;
+      background: var(--gray-300);
+      border-radius: var(--radius-full);
+    }
+    .barrier-status-text {
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
+      color: var(--gray-500);
+      margin-top: var(--space-2);
+    }
+    .barrier-status-text.open { color: var(--color-available); }
+
+    /* Step indicator */
+    .steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: var(--space-6);
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex: 1;
+    }
+    .step-circle {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: var(--text-xs);
+      font-weight: var(--weight-bold);
+      flex-shrink: 0;
+      border: 2px solid var(--gray-300);
+      color: var(--gray-400);
+      background: var(--surface-card);
+      transition: all var(--transition-base);
+    }
+    .step-circle.active { border-color: var(--brand-primary); color: var(--brand-primary); }
+    .step-circle.done   { border-color: var(--color-available); background: var(--color-available); color: #fff; }
+    .step-label { font-size: var(--text-xs); font-weight: var(--weight-medium); color: var(--gray-400); }
+    .step-label.active { color: var(--brand-primary); font-weight: var(--weight-semibold); }
+    .step-label.done   { color: var(--color-available); }
+    .step-line { flex: 1; height: 2px; background: var(--gray-200); margin: 0 var(--space-2); }
+    .step-line.done { background: var(--color-available); }
+  </style>
+</head>
+<body>
+<div id="toast-container" class="toast-container"></div>
+
+<div class="app-shell">
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2">
+          <rect x="1" y="3" width="15" height="13" rx="2"/>
+          <path d="M16 8h4l3 3v5h-7V8z"/>
+          <circle cx="5.5" cy="18.5" r="2.5"/>
+          <circle cx="18.5" cy="18.5" r="2.5"/>
+        </svg>
+      </div>
+      <div class="sidebar-logo-text">
+        <span class="brand-name">Lugogo PMS</span>
+        <span class="brand-sub">Attendant</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Operations</div>
+      <button class="nav-item active" onclick="switchTab('map',this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+        <span>Live Map</span>
+      </button>
+      <button class="nav-item" id="nav-entry" onclick="switchTab('entry',this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        <span>New Entry</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('exit',this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span>Process Exit</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('history',this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>Session History</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar" id="sidebar-avatar">JO</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebar-name">James Okello</div>
+          <div class="sidebar-user-role">Attendant</div>
+        </div>
+        <button class="btn-ghost btn-icon btn-sm" onclick="doLogout()" title="Logout" aria-label="Logout">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div class="main-content">
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title" id="topbar-title">Live Parking Map</div>
+        <div class="live-indicator">LIVE</div>
+      </div>
+      <div class="topbar-right">
+        <div id="parking-full-badge" class="badge badge-occupied hidden" style="font-size:var(--text-xs);padding:0.3rem 0.8rem">
+          PARKING FULL
+        </div>
+        <div style="font-size:var(--text-xs);color:var(--gray-500)" id="topbar-clock"></div>
+        <button class="btn btn-primary btn-sm" id="new-entry-btn" onclick="switchTab('entry', document.querySelector('.nav-item:nth-child(2)'))">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Entry
+        </button>
+      </div>
+    </header>
+
+    <!-- Parking Full Banner moved inside map shell -->
+    <!-- Tab panels -->
+    <div id="tab-map"     class="tab-panel active"></div>
+    <div id="tab-entry"   class="tab-panel">
+      <div class="tab-content-inner" id="entry-content"></div>
+    </div>
+    <div id="tab-exit"    class="tab-panel">
+      <div class="tab-content-inner" id="exit-content"></div>
+    </div>
+    <div id="tab-history" class="tab-panel">
+      <div class="tab-content-inner" id="history-content"></div>
+    </div>
+  </div>
+</div>
+
+<script src="state.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  /* ── Auth guard ── */
+  const user = PMS.state.restoreSession();
+  if (!user || user.role !== 'ATTENDANT') window.location.href = 'login.html';
+
+  /* ── Set user info ── */
+  const initials = user.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('sidebar-avatar').textContent = initials;
+  document.getElementById('sidebar-name').textContent   = user.name;
+
+  /* ── Clock ── */
+  function updateClock() {
+    document.getElementById('topbar-clock').textContent =
+      new Date().toLocaleTimeString('en-UG',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+  }
+  updateClock(); setInterval(updateClock, 1000);
+
+  /* ── Tab switcher ── */
+  const tabTitles = { map:'Live Parking Map', entry:'New Vehicle Entry', exit:'Process Vehicle Exit', history:'Session History' };
+  function switchTab(name, navEl) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    if (navEl) navEl.classList.add('active');
+    document.getElementById('topbar-title').textContent = tabTitles[name];
+    if (name === 'entry')   renderEntry();
+    if (name === 'exit')    renderExit();
+    if (name === 'history') renderHistory();
+  }
+
+  /* ── Parking full state ── */
+  function checkParkingFull() {
+    const full = PMS.state.availableSlots().length === 0;
+    const banner = document.getElementById('parking-full-banner');
+    if (banner) banner.classList.toggle('hidden', !full);
+    document.getElementById('parking-full-badge').classList.toggle('hidden', !full);
+    document.getElementById('new-entry-btn').disabled = full;
+    document.getElementById('nav-entry').disabled = full;
+  }
+
+  PMS.state.subscribe((event) => {
+    if (event === 'slot_updated' || event === 'session_created' || event === 'session_closed') {
+      checkParkingFull();
+      refreshMapMarkers();
+      updateMapStats();
+    }
+  });
+
+  /* ── Logout ── */
+  function doLogout() {
+    PMS.state.logout();
+    window.location.href = 'login.html';
+  }
+
+  checkParkingFull();
+</script>
+<!-- Phase 5b: Live Map -->
+<script>
+  const zoneBounds = {
+    'd1': [[0.32855,32.60385],[0.32855,32.60445],[0.32838,32.60445],[0.32838,32.60385]],
+    'd2': [[0.32825,32.60355],[0.32825,32.60415],[0.32808,32.60415],[0.32808,32.60355]],
+    'd3': [[0.32800,32.60325],[0.32800,32.60385],[0.32783,32.60385],[0.32783,32.60325]],
+    'd4': [[0.32775,32.60415],[0.32775,32.60475],[0.32758,32.60475],[0.32758,32.60415]],
+    'd5': [[0.32840,32.60445],[0.32840,32.60505],[0.32823,32.60505],[0.32823,32.60445]],
+  };
+  const zoneColors = { 'd1':'#1a56db','d2':'#d97706','d3':'#16a34a','d4':'#7c3aed','d5':'#0284c7' };
+  let map, slotMarkers = {}, mapInited = false;
+
+  function initMap() {
+    const mapPanel = document.getElementById('tab-map');
+    mapPanel.innerHTML = `
+      <div class="map-shell">
+        <div id="parking-map"></div>
+
+        <!-- Floating search top-left -->
+        <div class="map-search-float">
+          <div style="position:relative">
+            <svg class="map-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input class="map-search-input" id="map-slot-search" placeholder="Find slot e.g. A1" oninput="searchMapSlot(this.value)" aria-label="Search slot by ID" />
+          </div>
+        </div>
+
+        <!-- Floating panel top-right -->
+        <div class="map-float-panel" id="map-float-panel">
+          <div class="map-float-header">
+            <div class="map-float-title">
+              <div class="live-indicator" style="font-size:0.65rem">LIVE</div>
+              Slot Overview
+            </div>
+            <button class="panel-toggle" id="panel-toggle-btn" onclick="togglePanel()" aria-label="Collapse panel">
+              <svg id="panel-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+          </div>
+          <div class="map-float-body" id="map-float-body">
+            <!-- Stats -->
+            <div class="map-stats-row">
+              <div class="map-stat-mini available"><div class="map-stat-mini-value" id="ms-available">0</div><div class="map-stat-mini-label">Free</div></div>
+              <div class="map-stat-mini occupied"><div class="map-stat-mini-value" id="ms-occupied">0</div><div class="map-stat-mini-label">Taken</div></div>
+              <div class="map-stat-mini total"><div class="map-stat-mini-value" id="ms-total">0</div><div class="map-stat-mini-label">Total</div></div>
+            </div>
+
+            <!-- Occupancy bar -->
+            <div class="occ-bar-wrap">
+              <div class="occ-bar-label">
+                <span>Occupancy</span>
+                <span id="occ-pct" style="font-weight:600;color:var(--gray-700)">0%</span>
+              </div>
+              <div class="occ-bar"><div class="occ-bar-fill" id="occ-bar-fill" style="width:0%;background:var(--color-available)"></div></div>
+            </div>
+
+            <!-- Slot detail (shown on click) -->
+            <div class="slot-detail-panel hidden" id="slot-detail-panel"></div>
+
+            <div style="height:1px;background:rgba(0,0,0,0.07);margin:var(--space-3) 0"></div>
+
+            <!-- Zone legend -->
+            <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--gray-400);margin-bottom:var(--space-2)">Zones</div>
+            <div id="zone-legend"></div>
+
+            <div style="height:1px;background:rgba(0,0,0,0.07);margin:var(--space-3) 0"></div>
+
+            <!-- Marker legend -->
+            <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--gray-400);margin-bottom:var(--space-2)">Legend</div>
+            <div class="map-legend">
+              <div class="legend-item">
+                <svg width="18" height="14" viewBox="0 0 18 14"><rect x="0" y="0" width="18" height="14" rx="3" fill="#16a34a"/><circle cx="9" cy="7" r="3.5" fill="rgba(255,255,255,0.7)"/></svg>
+                <span>Available</span>
+              </div>
+              <div class="legend-item">
+                <svg width="18" height="14" viewBox="0 0 18 14"><rect x="0" y="0" width="18" height="14" rx="3" fill="#dc2626"/><rect x="5" y="4" width="8" height="6" rx="1" fill="rgba(255,255,255,0.7)"/></svg>
+                <span>Occupied (with elapsed time)</span>
+              </div>
+              <div class="legend-item">
+                <svg width="18" height="14" viewBox="0 0 18 14"><rect x="0" y="0" width="18" height="14" rx="3" fill="#6b7280"/><polygon points="9,3 14,11 4,11" fill="rgba(255,255,255,0.7)"/></svg>
+                <span>Out of Service</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Parking full floating banner -->
+        <div class="map-parking-full-banner hidden" id="parking-full-banner">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          PARKING FULL — Redirect incoming drivers
+        </div>
+      </div>`;
+
+    map = L.map('parking-map', { zoomControl: false }).setView([0.3282, 32.6037], 18);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors', maxZoom: 21
+    }).addTo(map);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+  }
+
+  function initMapLayers() {
+    PMS.destinations.forEach(dest => {
+      const bounds = zoneBounds[dest.id]; if (!bounds) return;
+      const color  = zoneColors[dest.id] || '#6b7280';
+      const poly   = L.polygon(bounds, { color, fillColor: color, fillOpacity: 0.07, weight: 1.5, dashArray: '5 5', opacity: 0.45 }).addTo(map);
+      poly.bindTooltip(dest.name, { permanent: true, direction: 'center', className: 'zone-lbl' });
+    });
+    PMS.landmarks.forEach(lm => {
+      const color = lm.type==='ENTRY_GATE' ? '#16a34a' : lm.type==='EXIT_GATE' ? '#dc2626' : '#1a56db';
+      const icon  = L.divIcon({ className:'', html:`<div style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-family:Inter,sans-serif;letter-spacing:0.02em">${lm.label}</div>`, iconAnchor:[0,0] });
+      L.marker([lm.lat, lm.lng], { icon }).addTo(map);
+    });
+    renderSlotMarkers();
+    updateMapStats();
+    renderZoneLegend();
+    setInterval(() => {
+      PMS.state.slots.forEach(slot => {
+        if (slot.status === 'OCCUPIED') {
+          const s = PMS.state.activeSessionForSlot(slot.slotId);
+          if (s && slotMarkers[slot.slotId]) slotMarkers[slot.slotId].marker.setIcon(makeSlotIcon(slot, s));
+        }
+      });
+    }, 60000);
+  }
+
+  function makeSlotIcon(slot, session) {
+    const bg = slot.status==='AVAILABLE' ? '#16a34a' : slot.status==='OCCUPIED' ? '#dc2626' : '#6b7280';
+    const shape = slot.status==='AVAILABLE'
+      ? `<svg width="10" height="10" viewBox="0 0 10 10" style="display:block;margin:0 auto 1px"><circle cx="5" cy="5" r="3.5" fill="rgba(255,255,255,0.75)"/></svg>`
+      : slot.status==='OCCUPIED'
+      ? `<svg width="10" height="10" viewBox="0 0 10 10" style="display:block;margin:0 auto 1px"><rect x="1.5" y="1.5" width="7" height="7" rx="1" fill="rgba(255,255,255,0.75)"/></svg>`
+      : `<svg width="10" height="10" viewBox="0 0 10 10" style="display:block;margin:0 auto 1px"><polygon points="5,1 9,9 1,9" fill="rgba(255,255,255,0.75)"/></svg>`;
+    const elapsed = session ? `<div style="font-size:8px;opacity:0.9;margin-top:1px;letter-spacing:0">${PMS.formatElapsed(session.entryTime)}</div>` : '';
+    const label   = `aria-label="Slot ${slot.slotId} ${slot.status}${session?' '+PMS.formatElapsed(session.entryTime):''}" role="button" tabindex="0"`;
+    return L.divIcon({
+      className: '',
+      html: `<div ${label} style="background:${bg};color:#fff;font-size:11px;font-weight:700;padding:3px 6px 4px;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.28);font-family:'JetBrains Mono',monospace;text-align:center;min-width:34px;border:2px solid rgba(255,255,255,0.35);cursor:pointer">${shape}${slot.slotId}${elapsed}</div>`,
+      iconAnchor: [17, 18]
+    });
+  }
+
+  function renderSlotMarkers() {
+    PMS.state.slots.forEach(slot => {
+      const session = PMS.state.activeSessionForSlot(slot.slotId);
+      const marker  = L.marker([slot.lat, slot.lng], { icon: makeSlotIcon(slot, session) }).addTo(map);
+      marker.on('click', () => showSlotDetail(slot));
+      slotMarkers[slot.slotId] = { slot, marker };
+    });
+  }
+
+  function refreshMapMarkers() {
+    if (!map) return;
+    PMS.state.slots.forEach(slot => {
+      const entry = slotMarkers[slot.slotId]; if (!entry) return;
+      entry.slot = slot;
+      entry.marker.setIcon(makeSlotIcon(slot, PMS.state.activeSessionForSlot(slot.slotId)));
+    });
+  }
+
+  function updateMapStats() {
+    const s   = PMS.state.getStats();
+    const pct = s.total ? Math.round(s.occupied / s.total * 100) : 0;
+    const a = document.getElementById('ms-available'); if (a) a.textContent = s.available;
+    const o = document.getElementById('ms-occupied');  if (o) o.textContent = s.occupied;
+    const t = document.getElementById('ms-total');     if (t) t.textContent = s.total;
+    const p = document.getElementById('occ-pct');      if (p) p.textContent = pct + '%';
+    const f = document.getElementById('occ-bar-fill');
+    if (f) {
+      f.style.width = pct + '%';
+      f.style.background = pct >= 90 ? 'var(--color-occupied)' : pct >= 60 ? 'var(--color-warning)' : 'var(--color-available)';
+    }
+  }
+
+  function renderZoneLegend() {
+    const el = document.getElementById('zone-legend'); if (!el) return;
+    el.innerHTML = PMS.destinations.map(d => `
+      <div class="legend-item" style="margin-bottom:6px">
+        <div style="width:10px;height:10px;background:${zoneColors[d.id]||'#6b7280'};border-radius:2px;flex-shrink:0;opacity:0.75"></div>
+        <span style="font-size:var(--text-xs);color:var(--gray-600)">${d.name}</span>
+      </div>`).join('');
+  }
+
+  function showSlotDetail(slot) {
+    const panel   = document.getElementById('slot-detail-panel'); if (!panel) return;
+    const session = PMS.state.activeSessionForSlot(slot.slotId);
+    const dest    = PMS.state.getDestination(slot.destinationId);
+    let html = '';
+    if (slot.status === 'AVAILABLE') {
+      html = `<div class="slot-detail-title"><span class="status-dot available"></span>Slot ${slot.slotId} — Available</div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Zone</span><span class="slot-detail-value">${dest?dest.name:'—'}</span></div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Status</span><span class="slot-detail-value"><span class="badge badge-available">Available</span></span></div>`;
+    } else if (slot.status === 'OCCUPIED' && session) {
+      html = `<div class="slot-detail-title"><span class="status-dot occupied"></span>Slot ${slot.slotId} — Occupied</div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Plate</span><span class="slot-detail-value" style="font-family:var(--font-mono);font-weight:700">${session.plateNumber}</span></div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Phone</span><span class="slot-detail-value">${session.driverPhone}</span></div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Destination</span><span class="slot-detail-value">${session.destinationName}</span></div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Entry</span><span class="slot-detail-value">${PMS.formatTime(session.entryTime)}</span></div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Elapsed</span><span class="slot-detail-value" style="color:var(--color-occupied);font-weight:700">${PMS.formatElapsed(session.entryTime)}</span></div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Attendant</span><span class="slot-detail-value">${session.attendantName}</span></div>`;
+    } else {
+      html = `<div class="slot-detail-title"><span class="status-dot oos"></span>Slot ${slot.slotId} — Out of Service</div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Zone</span><span class="slot-detail-value">${dest?dest.name:'—'}</span></div>`;
+    }
+    panel.innerHTML = html;
+    panel.classList.remove('hidden');
+    /* Ensure panel is expanded */
+    document.getElementById('map-float-panel').classList.remove('collapsed');
+  }
+
+  const zlStyle = document.createElement('style');
+  zlStyle.textContent = '.zone-lbl{background:transparent!important;border:none!important;box-shadow:none!important;font-size:10px!important;font-weight:700!important;color:rgba(0,0,0,0.45)!important;font-family:Inter,sans-serif!important}';
+  document.head.appendChild(zlStyle);
+
+  window.addEventListener('load', () => {
+    mapInited = true;
+    const mapPanel = document.getElementById('tab-map');
+    mapPanel.innerHTML = `<div style="height:calc(100vh - var(--topbar-height));display:flex;align-items:center;justify-content:center;flex-direction:column;gap:var(--space-4)">
+      <div class="map-loading-spinner"></div>
+      <div class="map-loading-text">Loading parking map...</div>
+    </div>`;
+    setTimeout(() => { initMap(); setTimeout(initMapLayers, 200); }, 300);
+  });
+
+  let panelCollapsed = false;
+  function togglePanel() {
+    panelCollapsed = !panelCollapsed;
+    const panel = document.getElementById('map-float-panel');
+    const icon  = document.getElementById('panel-toggle-icon');
+    const btn   = document.getElementById('panel-toggle-btn');
+    panel.classList.toggle('collapsed', panelCollapsed);
+    icon.innerHTML = panelCollapsed
+      ? '<polyline points="9 18 15 12 9 6"/>'
+      : '<polyline points="15 18 9 12 15 6"/>';
+    btn.setAttribute('aria-label', panelCollapsed ? 'Expand panel' : 'Collapse panel');
+  }
+
+  function searchMapSlot(term) {
+    if (!map) return;
+    const t = term.trim().toUpperCase();
+    if (!t) {
+      Object.values(slotMarkers).forEach(({ marker, slot }) => {
+        marker.setOpacity(1);
+        marker.setZIndexOffset(0);
+      });
+      return;
+    }
+    Object.values(slotMarkers).forEach(({ marker, slot }) => {
+      const match = slot.slotId.includes(t);
+      marker.setOpacity(match ? 1 : 0.2);
+      marker.setZIndexOffset(match ? 1000 : 0);
+      if (match && slot.slotId === t) {
+        map.setView([slot.lat, slot.lng], 20, { animate: true });
+        showSlotDetail(slot);
+      }
+    });
+  }
+</script>
+<!-- Phase 5c: Entry Form -->
+<script>
+  let entryStep = 1;
+  let assignedSlot = null;
+  let anprTimer = null;
+
+  function renderEntry() {
+    const el = document.getElementById('entry-content');
+    /* Skeleton while rendering */
+    el.innerHTML = `
+      <div style="max-width:760px;margin:0 auto;padding:var(--space-6)">
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-text" style="width:40%"></div>
+        <div style="height:var(--space-6)"></div>
+        <div class="skeleton-card"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row" style="width:60%"></div></div>
+      </div>`;
+    setTimeout(() => {
+    el.innerHTML = `
+      <div class="page-header">
+        <div class="page-title">New Vehicle Entry</div>
+        <div class="page-subtitle">Record driver details and assign a parking slot</div>
+      </div>
+
+      <div class="steps" id="entry-steps">
+        <div class="step">
+          <div class="step-circle active" id="sc1">1</div>
+          <div class="step-label active" id="sl1">Plate Capture</div>
+        </div>
+        <div class="step-line" id="sline1"></div>
+        <div class="step">
+          <div class="step-circle" id="sc2">2</div>
+          <div class="step-label" id="sl2">Driver Details</div>
+        </div>
+        <div class="step-line" id="sline2"></div>
+        <div class="step">
+          <div class="step-circle" id="sc3">3</div>
+          <div class="step-label" id="sl3">Confirm &amp; Notify</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body" id="entry-step-body"></div>
+      </div>`;
+
+    entryStep = 1;
+    assignedSlot = null;
+    renderEntryStep();
+    }, 350);
+  }
+
+  function renderEntryStep() {
+    [1,2,3].forEach(i => {
+      const sc = document.getElementById('sc'+i);
+      const sl = document.getElementById('sl'+i);
+      if (!sc) return;
+      sc.className = 'step-circle' + (i < entryStep ? ' done' : i === entryStep ? ' active' : '');
+      sl.className = 'step-label'  + (i < entryStep ? ' done' : i === entryStep ? ' active' : '');
+      if (i < entryStep) sc.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>`;
+      else sc.textContent = i;
+      const line = document.getElementById('sline'+i);
+      if (line) line.className = 'step-line' + (i < entryStep ? ' done' : '');
+    });
+
+    const body = document.getElementById('entry-step-body');
+    if (entryStep === 1) renderStep1(body);
+    if (entryStep === 2) renderStep2(body);
+    if (entryStep === 3) renderStep3(body);
+  }
+
+  /* Step 1 — ANPR plate capture */
+  function renderStep1(body) {
+    body.innerHTML = `
+      <div style="max-width:480px;margin:0 auto">
+        <div class="anpr-box" id="anpr-box">
+          <div class="anpr-scan-line" id="anpr-scan-line"></div>
+          <div class="anpr-status scanning" id="anpr-status">Waiting for camera...</div>
+          <div class="anpr-plate" id="anpr-plate" style="display:none"></div>
+        </div>
+        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);align-items:center">
+          <div style="flex:1">
+            <label class="form-label">Plate Number <span class="required">*</span></label>
+            <input id="plate-input" class="input" placeholder="e.g. UAA 123B" style="font-family:var(--font-mono);font-size:var(--text-lg);font-weight:700;letter-spacing:0.1em;text-transform:uppercase" />
+          </div>
+          <div style="padding-top:22px">
+            <button class="btn btn-outline" onclick="simulateANPR()">Simulate Camera</button>
+          </div>
+        </div>
+        <div class="form-error hidden" id="plate-error">Please enter a valid plate number.</div>
+        <div style="margin-top:var(--space-6);display:flex;justify-content:flex-end">
+          <button class="btn btn-primary btn-lg" onclick="goStep2()">Continue <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:4px"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+      </div>`;
+
+    document.getElementById('plate-input').addEventListener('input', e => {
+      e.target.value = e.target.value.toUpperCase();
+    });
+    simulateANPR();
+  }
+
+  function simulateANPR() {
+    const plates = ['UAA 123B','UBB 456C','UCC 789D','UDD 321E','UEE 654F','UGG 147H','UXX 999Z'];
+    const plate  = plates[Math.floor(Math.random() * plates.length)];
+    const box    = document.getElementById('anpr-box');
+    const status = document.getElementById('anpr-status');
+    const plEl   = document.getElementById('anpr-plate');
+    if (!box) return;
+    status.textContent = 'Scanning...';
+    status.className   = 'anpr-status scanning';
+    plEl.style.display = 'none';
+    clearTimeout(anprTimer);
+    anprTimer = setTimeout(() => {
+      status.textContent = 'Plate Captured';
+      status.className   = 'anpr-status captured';
+      plEl.textContent   = plate;
+      plEl.style.display = 'block';
+      const input = document.getElementById('plate-input');
+      if (input) input.value = plate;
+      PMS.toast('success', 'Plate captured', plate);
+    }, 2000);
+  }
+
+  function goStep2() {
+    const plate = document.getElementById('plate-input').value.trim();
+    if (!plate) {
+      document.getElementById('plate-error').classList.remove('hidden');
+      document.getElementById('plate-input').classList.add('error');
+      return;
+    }
+    entryStep = 2;
+    renderEntryStep();
+  }
+
+  /* Step 2 — Driver details + destination */
+  function renderStep2(body) {
+    const plate = document.getElementById('plate-input') ? document.getElementById('plate-input').value : window._entryPlate || '';
+    window._entryPlate = plate;
+    const destOptions = PMS.destinations.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+    body.innerHTML = `
+      <div style="max-width:480px;margin:0 auto">
+        <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);margin-bottom:var(--space-5);display:flex;align-items:center;gap:var(--space-3)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          <span style="font-family:var(--font-mono);font-weight:700;font-size:var(--text-lg);letter-spacing:0.1em">${plate}</span>
+          <span class="badge badge-info" style="margin-left:auto">Captured</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Driver Phone <span class="required">*</span></label>
+          <div class="input-wrapper">
+            <svg class="input-icon-left" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.13 6.13l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.73 16.92z"/></svg>
+            <input id="phone-input" class="input has-icon-left" placeholder="+256 7XX XXX XXX or 07XX XXX XXX" />
+          </div>
+          <div class="form-error hidden" id="phone-error">Enter a valid Ugandan mobile number (+256 or 07 followed by 8 digits).</div>
+        </div>
+        <div class="form-group" style="margin-top:var(--space-4)">
+          <label class="form-label">Destination <span class="required">*</span></label>
+          <select id="dest-select" class="select" onchange="previewNearestSlot()">
+            <option value="">Select destination...</option>
+            ${destOptions}
+          </select>
+          <div class="form-error hidden" id="dest-error">Please select a destination.</div>
+        </div>
+        <div id="nearest-slot-preview" style="margin-top:var(--space-4)"></div>
+        <div style="margin-top:var(--space-6);display:flex;justify-content:space-between">
+          <button class="btn btn-outline-gray" onclick="entryStep=1;renderEntryStep()">Back</button>
+          <button class="btn btn-primary btn-lg" onclick="goStep3()">Confirm Entry <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:4px"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+      </div>`;
+  }
+
+  function previewNearestSlot() {
+    const destId = document.getElementById('dest-select').value;
+    const preview = document.getElementById('nearest-slot-preview');
+    if (!destId) { preview.innerHTML = ''; return; }
+    const slot = PMS.state.findNearestSlot(destId);
+    const dest = PMS.state.getDestination(destId);
+    if (!slot) {
+      preview.innerHTML = `<div class="alert alert-danger">No available slots near ${dest.name}. Parking may be full.</div>`;
+      return;
+    }
+    preview.innerHTML = `
+      <div class="slot-preview">
+        <div class="slot-preview-label">Nearest Available Slot</div>
+        <div class="slot-preview-number">${slot.slotId}</div>
+        <div class="slot-preview-zone">Zone: ${dest.name}</div>
+      </div>`;
+  }
+
+  function goStep3() {
+    const phone  = document.getElementById('phone-input').value.trim();
+    const destId = document.getElementById('dest-select').value;
+    let valid = true;
+    if (!PMS.validateUgandaPhone(phone)) {
+      document.getElementById('phone-error').classList.remove('hidden');
+      document.getElementById('phone-input').classList.add('error');
+      valid = false;
+    }
+    if (!destId) {
+      document.getElementById('dest-error').classList.remove('hidden');
+      document.getElementById('dest-select').classList.add('error');
+      valid = false;
+    }
+    if (!valid) return;
+    const slot = PMS.state.findNearestSlot(destId);
+    if (!slot) { PMS.toast('error','Parking Full','No available slots.'); return; }
+    const dest = PMS.state.getDestination(destId);
+    window._entryPhone  = phone;
+    window._entryDestId = destId;
+    window._entryDest   = dest;
+    assignedSlot = slot;
+    entryStep = 3;
+    renderEntryStep();
+  }
+
+  /* Step 3 — Confirm + barrier + notify */
+  function renderStep3(body) {
+    const plate = window._entryPlate;
+    const phone = window._entryPhone;
+    const dest  = window._entryDest;
+    body.innerHTML = `
+      <div style="max-width:480px;margin:0 auto">
+        <div class="slot-preview" style="margin-bottom:var(--space-5)">
+          <div class="slot-preview-label">Assigned Slot</div>
+          <div class="slot-preview-number">${assignedSlot.slotId}</div>
+          <div class="slot-preview-zone">${dest.name}</div>
+        </div>
+        <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:var(--space-4);margin-bottom:var(--space-4)">
+          <div class="slot-detail-row"><span class="slot-detail-key">Plate</span><span class="slot-detail-value" style="font-family:var(--font-mono);font-weight:700">${plate}</span></div>
+          <div class="slot-detail-row"><span class="slot-detail-key">Phone</span><span class="slot-detail-value">${phone}</span></div>
+          <div class="slot-detail-row"><span class="slot-detail-key">Destination</span><span class="slot-detail-value">${dest.name}</span></div>
+          <div class="slot-detail-row"><span class="slot-detail-key">Slot</span><span class="slot-detail-value" style="font-family:var(--font-mono);font-weight:700;color:var(--brand-primary)">${assignedSlot.slotId}</span></div>
+        </div>
+        <div class="barrier-container" id="barrier-container">
+          <div class="barrier-gate">
+            <div class="barrier-post-el"></div>
+            <div class="barrier-arm-el" id="barrier-arm"></div>
+          </div>
+          <div class="barrier-road"></div>
+          <div class="barrier-status-text" id="barrier-status">Entry Barrier — Closed</div>
+        </div>
+        <div id="notify-section" class="hidden">
+          <div style="font-size:var(--text-sm);font-weight:600;color:var(--gray-700);margin-bottom:var(--space-3)">Send slot number to driver:</div>
+          <div class="notify-options">
+            <button class="notify-btn whatsapp" onclick="sendNotify('whatsapp')">
+              <svg viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+              WhatsApp
+            </button>
+            <button class="notify-btn" onclick="sendNotify('sms')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" stroke-width="2" width="28" height="28"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              SMS
+            </button>
+          </div>
+        </div>
+        <div style="margin-top:var(--space-5);display:flex;justify-content:space-between">
+          <button class="btn btn-outline-gray" onclick="entryStep=2;renderEntryStep()">Back</button>
+          <button class="btn btn-success btn-lg" id="confirm-entry-btn" onclick="confirmEntry()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Confirm &amp; Open Barrier
+          </button>
+        </div>
+        <div style="margin-top:var(--space-4);display:flex;justify-content:center">
+          <button class="btn btn-primary hidden" id="new-entry-again-btn" onclick="renderEntry()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Entry
+          </button>
+        </div>
+      </div>`;
+  }
+
+  function confirmEntry() {
+    const btn = document.getElementById('confirm-entry-btn');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="btn-loading-state"><span class="btn-spinner"></span>Processing...</span>`;
+    setTimeout(() => {
+      const session = PMS.state.createSession({
+        plateNumber:     window._entryPlate,
+        driverPhone:     window._entryPhone,
+        destinationId:   window._entryDestId,
+        destinationName: window._entryDest.name,
+        slotId:          assignedSlot.slotId,
+      });
+      /* Open barrier animation */
+      document.getElementById('barrier-arm').classList.add('open');
+      document.getElementById('barrier-status').textContent = 'Entry Barrier — Open';
+      document.getElementById('barrier-status').classList.add('open');
+      btn.classList.add('hidden');
+      document.getElementById('notify-section').classList.remove('hidden');
+      document.getElementById('new-entry-again-btn').classList.remove('hidden');
+      PMS.toast('success', 'Entry confirmed', `Slot ${assignedSlot.slotId} assigned to ${window._entryPlate}`);
+      window._activeSession = session;
+    }, 600);
+  }
+
+  function sendNotify(channel) {
+    const label = channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
+    setTimeout(() => {
+      const ok = Math.random() > 0.15;
+      if (ok) {
+        PMS.toast('success', `${label} sent`, `Slot ${assignedSlot.slotId} sent to ${window._entryPhone}`);
+      } else {
+        PMS.toast('error', `${label} failed`, 'Tap to retry.');
+      }
+    }, 1000);
+  }
+</script>
+<!-- Phase 5d: Exit Form + Session History -->
+<script>
+  /* ── EXIT FORM ── */
+  function renderExit() {
+    const el = document.getElementById('exit-content');
+    el.innerHTML = `
+      <div style="max-width:760px;margin:0 auto;padding:var(--space-6)">
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-text" style="width:35%"></div>
+        <div style="height:var(--space-6)"></div>
+        <div class="skeleton-card"><div class="skeleton" style="height:120px;margin-bottom:var(--space-4)"></div><div class="skeleton skeleton-row"></div></div>
+      </div>`;
+    setTimeout(() => {
+    el.innerHTML = `
+      <div class="page-header">
+        <div class="page-title">Process Vehicle Exit</div>
+        <div class="page-subtitle">Look up the active session and release the slot</div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div style="max-width:480px;margin:0 auto">
+            <div class="anpr-box" id="exit-anpr-box">
+              <div class="anpr-scan-line" id="exit-scan-line"></div>
+              <div class="anpr-status scanning" id="exit-anpr-status">Waiting for exit camera...</div>
+              <div class="anpr-plate" id="exit-anpr-plate" style="display:none"></div>
+            </div>
+            <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);align-items:flex-end">
+              <div style="flex:1">
+                <label class="form-label">Plate Number <span class="required">*</span></label>
+                <input id="exit-plate-input" class="input" placeholder="e.g. UAA 123B"
+                  style="font-family:var(--font-mono);font-size:var(--text-lg);font-weight:700;letter-spacing:0.1em;text-transform:uppercase"
+                  oninput="this.value=this.value.toUpperCase()" />
+              </div>
+              <button class="btn btn-outline" onclick="simulateExitANPR()">Simulate Camera</button>
+            </div>
+            <div class="form-error hidden" id="exit-plate-error">Please enter a plate number.</div>
+            <div id="exit-session-preview" style="margin-top:var(--space-4)"></div>
+            <div class="barrier-container hidden" id="exit-barrier-container">
+              <div class="barrier-gate">
+                <div class="barrier-post-el"></div>
+                <div class="barrier-arm-el" id="exit-barrier-arm"></div>
+              </div>
+              <div class="barrier-road"></div>
+              <div class="barrier-status-text" id="exit-barrier-status">Exit Barrier — Closed</div>
+            </div>
+            <div style="margin-top:var(--space-5);display:flex;justify-content:flex-end;gap:var(--space-3)">
+              <button class="btn btn-outline-gray" onclick="renderExit()">Reset</button>
+              <button class="btn btn-danger btn-lg" id="exit-confirm-btn" onclick="processExit()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Process Exit
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    simulateExitANPR();
+    }, 300);
+  }
+
+  function simulateExitANPR() {
+    const active = PMS.state.sessions.filter(s => s.status === 'ACTIVE');
+    if (!active.length) return;
+    const session = active[Math.floor(Math.random() * active.length)];
+    const plate   = session.plateNumber;
+    const status  = document.getElementById('exit-anpr-status');
+    const plEl    = document.getElementById('exit-anpr-plate');
+    if (!status) return;
+    status.textContent = 'Scanning exit lane...';
+    status.className   = 'anpr-status scanning';
+    plEl.style.display = 'none';
+    setTimeout(() => {
+      status.textContent = 'Plate Captured';
+      status.className   = 'anpr-status captured';
+      plEl.textContent   = plate;
+      plEl.style.display = 'block';
+      const input = document.getElementById('exit-plate-input');
+      if (input) { input.value = plate; lookupExitSession(plate); }
+      PMS.toast('info', 'Exit camera read', plate);
+    }, 2000);
+  }
+
+  function lookupExitSession(plate) {
+    const preview = document.getElementById('exit-session-preview');
+    if (!preview) return;
+    const session = PMS.state.activeSessionForPlate(plate);
+    if (!session) {
+      preview.innerHTML = `<div class="alert alert-danger"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>No active session found for <strong>${plate}</strong>. Barrier remains closed.</div>`;
+      return;
+    }
+    preview.innerHTML = `
+      <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:var(--space-4)">
+        <div style="font-size:var(--text-sm);font-weight:600;color:var(--gray-700);margin-bottom:var(--space-3);display:flex;align-items:center;gap:var(--space-2)">
+          <span class="status-dot occupied"></span> Active Session Found
+        </div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Plate</span><span class="slot-detail-value" style="font-family:var(--font-mono);font-weight:700">${session.plateNumber}</span></div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Slot</span><span class="slot-detail-value" style="font-family:var(--font-mono);font-weight:700;color:var(--brand-primary)">${session.slotId}</span></div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Destination</span><span class="slot-detail-value">${session.destinationName}</span></div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Entry Time</span><span class="slot-detail-value">${PMS.formatTime(session.entryTime)}</span></div>
+        <div class="slot-detail-row"><span class="slot-detail-key">Duration</span><span class="slot-detail-value" style="color:var(--color-occupied);font-weight:700">${PMS.formatElapsed(session.entryTime)}</span></div>
+      </div>`;
+  }
+
+  document.addEventListener('input', e => {
+    if (e.target.id === 'exit-plate-input') lookupExitSession(e.target.value.trim());
+  });
+
+  function processExit() {
+    const plate = document.getElementById('exit-plate-input').value.trim();
+    if (!plate) { document.getElementById('exit-plate-error').classList.remove('hidden'); return; }
+    const session = PMS.state.activeSessionForPlate(plate);
+    if (!session) { PMS.toast('error','No active session',`No session found for ${plate}`); return; }
+    const btn = document.getElementById('exit-confirm-btn');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="btn-loading-state"><span class="btn-spinner"></span>Processing...</span>`;
+    setTimeout(() => {
+      PMS.state.closeSession(plate);
+      document.getElementById('exit-barrier-container').classList.remove('hidden');
+      setTimeout(() => {
+        document.getElementById('exit-barrier-arm').classList.add('open');
+        document.getElementById('exit-barrier-status').textContent = 'Exit Barrier — Open';
+        document.getElementById('exit-barrier-status').classList.add('open');
+      }, 100);
+      document.getElementById('exit-session-preview').innerHTML = `<div class="alert alert-success"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg>Session closed. Slot <strong>${session.slotId}</strong> is now available.</div>`;
+      PMS.toast('success','Exit processed',`${plate} — Slot ${session.slotId} released`);
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Exit`;
+      btn.onclick = () => renderExit();
+    }, 700);
+  }
+
+  /* ── SESSION HISTORY ── */
+  function renderHistory() {
+    const el = document.getElementById('history-content');
+    el.innerHTML = `
+      <div style="max-width:760px;margin:0 auto;padding:var(--space-6)">
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-text" style="width:30%"></div>
+        <div style="height:var(--space-4)"></div>
+        <div class="table-wrapper">
+          ${Array(6).fill('<div class="skeleton-table-row"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>').join('')}
+        </div>
+      </div>`;
+    setTimeout(() => {
+    el.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="page-title">Session History</div>
+          <div class="page-subtitle">All vehicle sessions — most recent first</div>
+        </div>
+        <div class="live-indicator">LIVE</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4)">
+        <div class="search-input-wrapper" style="max-width:320px;width:100%">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="search-input" id="history-search" placeholder="Search plate or phone..." oninput="filterHistory(this.value)" />
+        </div>
+        <div style="font-size:var(--text-xs);color:var(--gray-500)" id="history-count"></div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr>
+            <th>Plate</th><th>Phone</th><th>Destination</th><th>Slot</th>
+            <th>Entry Time</th><th>Exit Time</th><th>Duration</th><th>Status</th>
+          </tr></thead>
+          <tbody id="history-tbody"></tbody>
+        </table>
+      </div>`;
+    filterHistory('');
+    }, 300);
+  }
+
+  function filterHistory(term) {
+    const rows    = PMS.state.searchSessions(term);
+    const tbody   = document.getElementById('history-tbody');
+    const counter = document.getElementById('history-count');
+    if (!tbody) return;
+    counter.textContent = `${rows.length} record${rows.length !== 1 ? 's' : ''}`;
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:var(--space-10)"><svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><div class="empty-state-title">No sessions found</div><div class="empty-state-text">Try a different search term.</div></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(s => {
+      const isActive = s.status === 'ACTIVE';
+      const duration = isActive ? PMS.formatElapsed(s.entryTime) : (() => {
+        const ms = new Date(s.exitTime) - new Date(s.entryTime);
+        const h  = Math.floor(ms/3600000), m = Math.floor((ms%3600000)/60000);
+        return `${h}h ${m}m`;
+      })();
+      return `<tr>
+        <td class="td-plate">${s.plateNumber}</td>
+        <td style="font-size:var(--text-xs)">${s.driverPhone}</td>
+        <td style="font-size:var(--text-xs);max-width:140px">${s.destinationName}</td>
+        <td class="td-slot">${s.slotId}</td>
+        <td style="font-size:var(--text-xs)">${PMS.formatDateTime(s.entryTime)}</td>
+        <td style="font-size:var(--text-xs);color:${isActive?'var(--gray-400)':'var(--gray-700)'}">${isActive ? '—' : PMS.formatDateTime(s.exitTime)}</td>
+        <td style="font-size:var(--text-xs);font-weight:600;color:${isActive?'var(--color-occupied)':'var(--gray-600)'}">${duration}</td>
+        <td><span class="badge ${isActive?'badge-active':'badge-closed'}">${isActive?'Active':'Closed'}</span></td>
+      </tr>`;
+    }).join('');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Operator — Lugogo Mall PMS</title>
+  <link rel="stylesheet" href="shared.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    /* ── Slot layout map ── */
+    #op-slots-map {
+      height: calc(100vh - var(--topbar-height) - 120px);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      border: 1px solid var(--gray-200);
+    }
+
+    /* ── Donut chart ── */
+    .donut-wrap {
+      position: relative;
+      width: 160px; height: 160px;
+      flex-shrink: 0;
+    }
+    .donut-svg { transform: rotate(-90deg); }
+    .donut-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .donut-pct {
+      font-size: var(--text-2xl);
+      font-weight: var(--weight-extrabold);
+      color: var(--gray-900);
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+    .donut-lbl {
+      font-size: var(--text-xs);
+      color: var(--gray-500);
+      font-weight: var(--weight-medium);
+    }
+
+    /* ── Activity feed ── */
+    .activity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 5px;
+    }
+    .activity-text {
+      font-size: var(--text-sm);
+      color: var(--gray-700);
+      flex: 1;
+    }
+    .activity-time {
+      font-size: var(--text-xs);
+      color: var(--gray-400);
+      white-space: nowrap;
+    }
+
+    /* ── Destination table inline edit ── */
+    .dest-edit-input {
+      width: 100%;
+      padding: 0.3rem 0.5rem;
+      font-size: var(--text-sm);
+      border: 1.5px solid var(--brand-primary);
+      border-radius: var(--radius-sm);
+      outline: none;
+      font-family: var(--font-sans);
+    }
+
+    /* ── Slot layout controls ── */
+    .slot-map-toolbar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-4) 0;
+      flex-wrap: wrap;
+    }
+    .mode-btn {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-md);
+      border: 1.5px solid var(--gray-300);
+      background: var(--surface-card);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+      color: var(--gray-600);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .mode-btn:hover { border-color: var(--brand-primary); color: var(--brand-primary); }
+    .mode-btn.active { border-color: var(--brand-primary); background: var(--brand-primary-lt); color: var(--brand-primary); font-weight: var(--weight-semibold); }
+
+    /* ── Barrier log ── */
+    .barrier-type-entry { color: var(--color-available); font-weight: var(--weight-semibold); }
+    .barrier-type-exit  { color: var(--color-occupied);  font-weight: var(--weight-semibold); }
+  </style>
+</head>
+<body>
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Confirm modal -->
+<div class="modal-overlay hidden" id="confirm-modal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <div class="modal-title" id="confirm-modal-title">Confirm Action</div>
+      <button class="modal-close" onclick="closeConfirmModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-modal-text" style="font-size:var(--text-sm);color:var(--gray-700);line-height:var(--leading-relaxed)"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-gray" onclick="closeConfirmModal()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-modal-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add slot modal -->
+<div class="modal-overlay hidden" id="add-slot-modal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <div class="modal-title">Add New Slot</div>
+      <button class="modal-close" onclick="document.getElementById('add-slot-modal').classList.add('hidden')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Slot ID <span class="required">*</span></label>
+        <input id="new-slot-id" class="input" placeholder="e.g. F1" style="font-family:var(--font-mono);font-weight:700;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" />
+      </div>
+      <div class="form-group" style="margin-top:var(--space-4)">
+        <label class="form-label">Destination Zone</label>
+        <select id="new-slot-dest" class="select"></select>
+      </div>
+      <div style="margin-top:var(--space-3);font-size:var(--text-xs);color:var(--gray-500)" id="new-slot-coords"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-gray" onclick="document.getElementById('add-slot-modal').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewSlot()">Add Slot</button>
+    </div>
+  </div>
+</div>
+
+<div class="app-shell">
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2">
+          <rect x="1" y="3" width="15" height="13" rx="2"/>
+          <path d="M16 8h4l3 3v5h-7V8z"/>
+          <circle cx="5.5" cy="18.5" r="2.5"/>
+          <circle cx="18.5" cy="18.5" r="2.5"/>
+        </svg>
+      </div>
+      <div class="sidebar-logo-text">
+        <span class="brand-name">Lugogo PMS</span>
+        <span class="brand-sub">Operator</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Management</div>
+      <button class="nav-item active" onclick="switchTab('dashboard',this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('destinations',this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span>Destinations</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('slots',this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+        <span>Slot Layout</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('history',this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <span>Session History</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('barrierlog',this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>Barrier Log</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar" id="sidebar-avatar">SN</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebar-name">Sarah Nakato</div>
+          <div class="sidebar-user-role">Operator</div>
+        </div>
+        <button class="btn-ghost btn-icon btn-sm" onclick="doLogout()" title="Logout" aria-label="Logout">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title" id="topbar-title">Operator Dashboard</div>
+        <div class="live-indicator">LIVE</div>
+      </div>
+      <div class="topbar-right">
+        <div style="font-size:var(--text-xs);color:var(--gray-500)" id="topbar-clock"></div>
+        <a href="attendant.html" class="btn btn-outline btn-sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/></svg>
+          Live Map
+        </a>
+      </div>
+    </header>
+
+    <!-- Tab panels -->
+    <div id="tab-dashboard"    class="tab-panel active"><div class="page-content" id="dashboard-content"></div></div>
+    <div id="tab-destinations" class="tab-panel"><div class="page-content" id="destinations-content"></div></div>
+    <div id="tab-slots"        class="tab-panel"><div class="page-content" id="slots-content"></div></div>
+    <div id="tab-history"      class="tab-panel"><div class="page-content" id="op-history-content"></div></div>
+    <div id="tab-barrierlog"   class="tab-panel"><div class="page-content" id="barrierlog-content"></div></div>
+  </div>
+</div>
+
+<script src="state.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  /* ── Auth guard ── */
+  const user = PMS.state.restoreSession();
+  if (!user || user.role !== 'OPERATOR') window.location.href = 'login.html';
+
+  const initials = user.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('sidebar-avatar').textContent = initials;
+  document.getElementById('sidebar-name').textContent   = user.name;
+
+  /* ── Clock ── */
+  function updateClock() {
+    document.getElementById('topbar-clock').textContent =
+      new Date().toLocaleTimeString('en-UG',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+  }
+  updateClock(); setInterval(updateClock, 1000);
+
+  /* ── Tab switcher ── */
+  const tabTitles = {
+    dashboard:'Operator Dashboard', destinations:'Destination Management',
+    slots:'Slot Layout Management', history:'Session History', barrierlog:'Barrier Log'
+  };
+  let slotsMapInited = false;
+
+  function switchTab(name, navEl) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    if (navEl) navEl.classList.add('active');
+    document.getElementById('topbar-title').textContent = tabTitles[name];
+    if (name === 'dashboard')    renderDashboard();
+    if (name === 'destinations') renderDestinations();
+    if (name === 'slots')        renderSlots();
+    if (name === 'history')      renderOpHistory();
+    if (name === 'barrierlog')   renderBarrierLog();
+  }
+
+  /* ── Confirm modal ── */
+  function showConfirmModal(title, text, onOk) {
+    document.getElementById('confirm-modal-title').textContent = title;
+    document.getElementById('confirm-modal-text').textContent  = text;
+    document.getElementById('confirm-modal-ok').onclick = () => { closeConfirmModal(); onOk(); };
+    document.getElementById('confirm-modal').classList.remove('hidden');
+  }
+  function closeConfirmModal() {
+    document.getElementById('confirm-modal').classList.add('hidden');
+  }
+
+  /* ── Logout ── */
+  function doLogout() { PMS.state.logout(); window.location.href = 'login.html'; }
+
+  /* ── Auto-refresh dashboard every 5s ── */
+  setInterval(() => {
+    if (document.getElementById('tab-dashboard').classList.contains('active')) renderDashboard();
+  }, 5000);
+
+  /* Init dashboard on load */
+  window.addEventListener('load', () => renderDashboard());
+</script>
+<!-- Phase 6b: Dashboard -->
+<script>
+  function renderDashboard() {
+    const el = document.getElementById('dashboard-content');
+    if (!el) return;
+    if (!el.dataset.loaded) {
+      el.innerHTML = `
+        <div style="padding:var(--space-6)">
+          <div class="skeleton skeleton-title" style="margin-bottom:var(--space-2)"></div>
+          <div class="skeleton skeleton-text" style="width:35%;margin-bottom:var(--space-6)"></div>
+          <div class="grid grid-4" style="margin-bottom:var(--space-6)">${Array(4).fill('<div class="skeleton skeleton-stat"></div>').join('')}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6)">
+            <div class="skeleton-card"><div class="skeleton" style="height:200px"></div></div>
+            <div class="skeleton-card">${Array(5).fill('<div class="skeleton skeleton-row"></div>').join('')}</div>
+          </div>
+        </div>`;
+      setTimeout(() => { el.dataset.loaded = '1'; renderDashboard(); }, 400);
+      return;
+    }
+    const stats = PMS.state.getStats();
+    const pct   = Math.round((stats.occupied / stats.total) * 100) || 0;
+
+    /* Donut segments */
+    const r = 60, circ = 2 * Math.PI * r;
+    const occDash  = (stats.occupied  / stats.total) * circ;
+    const avDash   = (stats.available / stats.total) * circ;
+    const oosDash  = (stats.oos       / stats.total) * circ;
+    const occOff   = 0;
+    const avOff    = -occDash;
+    const oosOff   = -(occDash + avDash);
+
+    /* Recent activity from sessions */
+    const recent = [...PMS.state.sessions]
+      .sort((a,b) => new Date(b.entryTime) - new Date(a.entryTime))
+      .slice(0, 8);
+
+    el.innerHTML = `
+      <div class="page-header">
+        <div class="page-title">Operator Dashboard</div>
+        <div class="page-subtitle">Live facility overview &mdash; updates every 5 seconds</div>
+      </div>
+
+      <!-- Stat cards -->
+      <div class="grid grid-4" style="margin-bottom:var(--space-6)">
+        <div class="stat-card total">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-card-label">Total Slots</div>
+              <div class="stat-card-value">${stats.total}</div>
+            </div>
+            <div class="stat-card-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </div>
+          </div>
+          <div class="stat-card-delta">Across 5 destination zones</div>
+        </div>
+
+        <div class="stat-card occupied">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-card-label">Occupied</div>
+              <div class="stat-card-value">${stats.occupied}</div>
+            </div>
+            <div class="stat-card-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-occupied)" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            </div>
+          </div>
+          <div class="stat-card-delta">${pct}% occupancy rate</div>
+        </div>
+
+        <div class="stat-card available">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-card-label">Available</div>
+              <div class="stat-card-value">${stats.available}</div>
+            </div>
+            <div class="stat-card-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-available)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+          </div>
+          <div class="stat-card-delta">${stats.oos} slot(s) out of service</div>
+        </div>
+
+        <div class="stat-card today">
+          <div class="stat-card-header">
+            <div>
+              <div class="stat-card-label">Today&apos;s Entries</div>
+              <div class="stat-card-value">${stats.totalToday}</div>
+            </div>
+            <div class="stat-card-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+          </div>
+          <div class="stat-card-delta">Since midnight EAT</div>
+        </div>
+      </div>
+
+      <!-- Chart + Activity -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6)">
+
+        <!-- Occupancy donut -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Occupancy Breakdown</div>
+              <div class="card-subtitle">Current slot status distribution</div>
+            </div>
+          </div>
+          <div class="card-body" style="display:flex;align-items:center;gap:var(--space-8)">
+            <div class="donut-wrap">
+              <svg class="donut-svg" width="160" height="160" viewBox="0 0 160 160">
+                <circle cx="80" cy="80" r="60" fill="none" stroke="var(--gray-100)" stroke-width="20"/>
+                <circle cx="80" cy="80" r="60" fill="none" stroke="var(--color-occupied)"  stroke-width="20"
+                  stroke-dasharray="${occDash.toFixed(2)} ${circ.toFixed(2)}"
+                  stroke-dashoffset="${occOff.toFixed(2)}" />
+                <circle cx="80" cy="80" r="60" fill="none" stroke="var(--color-available)" stroke-width="20"
+                  stroke-dasharray="${avDash.toFixed(2)} ${circ.toFixed(2)}"
+                  stroke-dashoffset="${avOff.toFixed(2)}" />
+                <circle cx="80" cy="80" r="60" fill="none" stroke="var(--color-oos)"       stroke-width="20"
+                  stroke-dasharray="${oosDash.toFixed(2)} ${circ.toFixed(2)}"
+                  stroke-dashoffset="${oosOff.toFixed(2)}" />
+              </svg>
+              <div class="donut-center">
+                <div class="donut-pct">${pct}%</div>
+                <div class="donut-lbl">Occupied</div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:var(--space-3)">
+              <div class="legend-item" style="gap:var(--space-3)">
+                <div style="width:12px;height:12px;border-radius:2px;background:var(--color-occupied);flex-shrink:0"></div>
+                <div>
+                  <div style="font-size:var(--text-sm);font-weight:600;color:var(--gray-900)">${stats.occupied} Occupied</div>
+                  <div style="font-size:var(--text-xs);color:var(--gray-500)">${Math.round(stats.occupied/stats.total*100)}% of total</div>
+                </div>
+              </div>
+              <div class="legend-item" style="gap:var(--space-3)">
+                <div style="width:12px;height:12px;border-radius:2px;background:var(--color-available);flex-shrink:0"></div>
+                <div>
+                  <div style="font-size:var(--text-sm);font-weight:600;color:var(--gray-900)">${stats.available} Available</div>
+                  <div style="font-size:var(--text-xs);color:var(--gray-500)">${Math.round(stats.available/stats.total*100)}% of total</div>
+                </div>
+              </div>
+              <div class="legend-item" style="gap:var(--space-3)">
+                <div style="width:12px;height:12px;border-radius:2px;background:var(--color-oos);flex-shrink:0"></div>
+                <div>
+                  <div style="font-size:var(--text-sm);font-weight:600;color:var(--gray-900)">${stats.oos} Out of Service</div>
+                  <div style="font-size:var(--text-xs);color:var(--gray-500)">${Math.round(stats.oos/stats.total*100)}% of total</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity feed -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Recent Activity</div>
+              <div class="card-subtitle">Latest session events</div>
+            </div>
+            <div class="live-indicator">LIVE</div>
+          </div>
+          <div class="card-body" style="padding-top:0">
+            ${recent.map(s => `
+              <div class="activity-item">
+                <div class="activity-dot" style="background:${s.status==='ACTIVE'?'var(--color-occupied)':'var(--color-available)'}"></div>
+                <div class="activity-text">
+                  <span style="font-family:var(--font-mono);font-weight:700">${s.plateNumber}</span>
+                  ${s.status==='ACTIVE' ? 'entered' : 'exited'} &mdash;
+                  <span style="color:var(--gray-500)">${s.destinationName}</span>
+                  &mdash; Slot <span style="font-family:var(--font-mono);color:var(--brand-primary);font-weight:700">${s.slotId}</span>
+                </div>
+                <div class="activity-time">${PMS.formatTime(s.status==='ACTIVE'?s.entryTime:s.exitTime)}</div>
+              </div>`).join('')}
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Zone breakdown -->
+      <div class="card" style="margin-top:var(--space-6)">
+        <div class="card-header">
+          <div class="card-title">Zone Occupancy</div>
+          <div class="card-subtitle">Slots occupied per destination zone</div>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-4)">
+            ${PMS.destinations.slice(0,5).map(dest => {
+              const zoneSlots    = PMS.state.slots.filter(s => s.destinationId === dest.id);
+              const zoneOccupied = zoneSlots.filter(s => s.status === 'OCCUPIED').length;
+              const zoneTotal    = zoneSlots.length;
+              const zonePct      = zoneTotal ? Math.round(zoneOccupied/zoneTotal*100) : 0;
+              return `
+                <div style="text-align:center">
+                  <div style="font-size:var(--text-xs);font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:var(--space-2)">${dest.name.split(' ')[0]}</div>
+                  <div style="font-size:var(--text-2xl);font-weight:800;color:var(--gray-900);letter-spacing:-0.03em">${zoneOccupied}/${zoneTotal}</div>
+                  <div style="height:6px;background:var(--gray-100);border-radius:var(--radius-full);margin-top:var(--space-2);overflow:hidden">
+                    <div style="height:100%;width:${zonePct}%;background:${zonePct>80?'var(--color-occupied)':zonePct>50?'var(--color-warning)':'var(--color-available)'};border-radius:var(--radius-full);transition:width 0.5s ease"></div>
+                  </div>
+                  <div style="font-size:var(--text-xs);color:var(--gray-400);margin-top:4px">${zonePct}%</div>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>`;
+  }
+</script>
+<!-- Phase 6c: Destination Management -->
+<script>
+  function renderDestinations() {
+    const el = document.getElementById('destinations-content');
+    if (!el) return;
+    if (!el.dataset.loaded) {
+      el.innerHTML = `<div style="padding:var(--space-6)"><div class="skeleton skeleton-title" style="margin-bottom:var(--space-2)"></div><div class="skeleton skeleton-text" style="width:30%;margin-bottom:var(--space-6)"></div><div class="table-wrapper">${Array(6).fill('<div class="skeleton-table-row"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>').join('')}</div></div>`;
+      setTimeout(() => { el.dataset.loaded = '1'; renderDestinations(); }, 300);
+      return;
+    }
+    el.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="page-title">Destination Management</div>
+          <div class="page-subtitle">Add, edit, or remove mall destinations</div>
+        </div>
+        <button class="btn btn-primary" onclick="showAddDestForm()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Destination
+        </button>
+      </div>
+
+      <!-- Add form -->
+      <div class="card hidden" id="add-dest-form" style="margin-bottom:var(--space-5)">
+        <div class="card-header">
+          <div class="card-title" id="dest-form-title">Add New Destination</div>
+          <button class="btn-ghost btn-icon btn-sm" onclick="hideAddDestForm()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Destination Name <span class="required">*</span></label>
+              <input id="dest-name-input" class="input" placeholder="e.g. Carrefour Supermarket" />
+              <div class="form-error hidden" id="dest-name-error">Name is required.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">GPS Anchor Latitude <span class="required">*</span></label>
+              <input id="dest-lat-input" class="input" placeholder="e.g. 0.32845" type="number" step="0.00001" />
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:var(--space-4)">
+            <div class="form-group">
+              <label class="form-label">GPS Anchor Longitude <span class="required">*</span></label>
+              <input id="dest-lng-input" class="input" placeholder="e.g. 32.60412" type="number" step="0.00001" />
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:var(--space-3)">
+              <button class="btn btn-primary" onclick="saveDestination()" id="dest-save-btn">Save Destination</button>
+              <button class="btn btn-outline-gray" onclick="hideAddDestForm()">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrapper">
+        <table>
+          <thead><tr>
+            <th>Destination Name</th>
+            <th>Anchor Lat</th>
+            <th>Anchor Lng</th>
+            <th>Active Sessions</th>
+            <th>Slots in Zone</th>
+            <th style="text-align:right">Actions</th>
+          </tr></thead>
+          <tbody id="dest-tbody"></tbody>
+        </table>
+      </div>`;
+    renderDestTable();
+  }
+
+  function renderDestTable() {
+    const tbody = document.getElementById('dest-tbody');
+    if (!tbody) return;
+    if (!PMS.destinations.length) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state" style="padding:var(--space-10)"><div class="empty-state-title">No destinations yet</div><div class="empty-state-text">Click "Add Destination" to get started.</div></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = PMS.destinations.map(dest => {
+      const activeSessions = PMS.state.sessions.filter(s => s.destinationId === dest.id && s.status === 'ACTIVE').length;
+      const zoneSlots      = PMS.state.slots.filter(s => s.destinationId === dest.id).length;
+      return `
+        <tr id="dest-row-${dest.id}">
+          <td>
+            <div id="dest-name-display-${dest.id}" style="font-weight:600;color:var(--gray-900)">${dest.name}</div>
+            <input id="dest-name-edit-${dest.id}" class="dest-edit-input hidden" value="${dest.name}" />
+          </td>
+          <td>
+            <div id="dest-lat-display-${dest.id}" style="font-family:var(--font-mono);font-size:var(--text-xs)">${dest.anchorLat.toFixed(5)}</div>
+            <input id="dest-lat-edit-${dest.id}" class="dest-edit-input hidden" value="${dest.anchorLat}" type="number" step="0.00001" />
+          </td>
+          <td>
+            <div id="dest-lng-display-${dest.id}" style="font-family:var(--font-mono);font-size:var(--text-xs)">${dest.anchorLng.toFixed(5)}</div>
+            <input id="dest-lng-edit-${dest.id}" class="dest-edit-input hidden" value="${dest.anchorLng}" type="number" step="0.00001" />
+          </td>
+          <td>
+            <span class="badge ${activeSessions > 0 ? 'badge-active' : 'badge-closed'}">${activeSessions} active</span>
+          </td>
+          <td style="font-weight:600">${zoneSlots}</td>
+          <td>
+            <div class="td-actions" style="justify-content:flex-end">
+              <div id="dest-view-btns-${dest.id}">
+                <button class="btn btn-outline btn-sm" onclick="startEditDest('${dest.id}')">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  Edit
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="deleteDest('${dest.id}')">Delete</button>
+              </div>
+              <div id="dest-edit-btns-${dest.id}" class="hidden">
+                <button class="btn btn-success btn-sm" onclick="saveEditDest('${dest.id}')">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  Save
+                </button>
+                <button class="btn btn-outline-gray btn-sm" onclick="cancelEditDest('${dest.id}')">Cancel</button>
+              </div>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  let editingDestId = null;
+
+  function showAddDestForm() {
+    editingDestId = null;
+    document.getElementById('dest-form-title').textContent = 'Add New Destination';
+    document.getElementById('dest-save-btn').textContent   = 'Save Destination';
+    document.getElementById('dest-name-input').value = '';
+    document.getElementById('dest-lat-input').value  = '';
+    document.getElementById('dest-lng-input').value  = '';
+    document.getElementById('add-dest-form').classList.remove('hidden');
+    document.getElementById('dest-name-input').focus();
+  }
+
+  function hideAddDestForm() {
+    document.getElementById('add-dest-form').classList.add('hidden');
+    editingDestId = null;
+  }
+
+  function saveDestination() {
+    const name = document.getElementById('dest-name-input').value.trim();
+    const lat  = document.getElementById('dest-lat-input').value;
+    const lng  = document.getElementById('dest-lng-input').value;
+    if (!name) { document.getElementById('dest-name-error').classList.remove('hidden'); return; }
+    document.getElementById('dest-name-error').classList.add('hidden');
+    if (editingDestId) {
+      PMS.state.updateDestination(editingDestId, name, lat || 0, lng || 0);
+      PMS.toast('success', 'Destination updated', name);
+    } else {
+      PMS.state.addDestination(name, lat || 0, lng || 0);
+      PMS.toast('success', 'Destination added', name);
+    }
+    hideAddDestForm();
+    renderDestTable();
+  }
+
+  function startEditDest(id) {
+    const dest = PMS.state.getDestination(id);
+    if (!dest) return;
+    ['name','lat','lng'].forEach(f => {
+      document.getElementById(`dest-${f}-display-${id}`).classList.add('hidden');
+      document.getElementById(`dest-${f}-edit-${id}`).classList.remove('hidden');
+    });
+    document.getElementById(`dest-view-btns-${id}`).classList.add('hidden');
+    document.getElementById(`dest-edit-btns-${id}`).classList.remove('hidden');
+  }
+
+  function saveEditDest(id) {
+    const name = document.getElementById(`dest-name-edit-${id}`).value.trim();
+    const lat  = document.getElementById(`dest-lat-edit-${id}`).value;
+    const lng  = document.getElementById(`dest-lng-edit-${id}`).value;
+    if (!name) { PMS.toast('error','Name required','Destination name cannot be empty.'); return; }
+    PMS.state.updateDestination(id, name, lat, lng);
+    PMS.toast('success','Destination updated', name);
+    renderDestTable();
+  }
+
+  function cancelEditDest(id) {
+    ['name','lat','lng'].forEach(f => {
+      document.getElementById(`dest-${f}-display-${id}`).classList.remove('hidden');
+      document.getElementById(`dest-${f}-edit-${id}`).classList.add('hidden');
+    });
+    document.getElementById(`dest-view-btns-${id}`).classList.remove('hidden');
+    document.getElementById(`dest-edit-btns-${id}`).classList.add('hidden');
+  }
+
+  function deleteDest(id) {
+    const dest   = PMS.state.getDestination(id);
+    const result = PMS.state.deleteDestination(id);
+    if (!result.ok) {
+      showConfirmModal(
+        'Active Sessions Warning',
+        `"${dest.name}" has ${result.activeSessions} active session(s). Removing it will not affect those sessions but drivers will no longer see it as a destination. Proceed?`,
+        () => {
+          PMS.state.destinations = PMS.state.destinations.filter(d => d.id !== id);
+          PMS.toast('warning','Destination removed', dest.name);
+          renderDestTable();
+        }
+      );
+      return;
+    }
+    showConfirmModal(
+      'Remove Destination',
+      `Are you sure you want to remove "${dest.name}"? This cannot be undone.`,
+      () => { PMS.toast('success','Destination removed', dest.name); renderDestTable(); }
+    );
+  }
+</script>
+<!-- Phase 6d: Slot Layout + History + Barrier Log -->
+<script>
+  /* ── SLOT LAYOUT MAP ── */
+  let opMap, opSlotMarkers = {}, opMapMode = 'view', pendingLatLng = null;
+
+  function renderSlots() {
+    const el = document.getElementById('slots-content');
+    if (!el) return;
+    if (!el.dataset.loaded) {
+      el.innerHTML = `<div style="padding:var(--space-6)"><div class="skeleton skeleton-title" style="margin-bottom:var(--space-2)"></div><div class="skeleton skeleton-text" style="width:40%;margin-bottom:var(--space-4)"></div><div class="skeleton" style="height:420px;border-radius:var(--radius-xl)"></div></div>`;
+      setTimeout(() => { el.dataset.loaded = '1'; renderSlots(); }, 350);
+      return;
+    }
+    el.innerHTML = `
+      <div class="page-header">
+        <div class="page-title">Slot Layout Management</div>
+        <div class="page-subtitle">Click the map to place slots. Drag markers to reposition.</div>
+      </div>
+      <div class="slot-map-toolbar">
+        <button class="mode-btn active" id="mode-view-btn" onclick="setMapMode('view',this)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          View
+        </button>
+        <button class="mode-btn" id="mode-add-btn" onclick="setMapMode('add',this)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Slot
+        </button>
+        <button class="mode-btn" id="mode-landmark-btn" onclick="setMapMode('landmark',this)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          Add Landmark
+        </button>
+        <div style="margin-left:auto;display:flex;gap:var(--space-3);align-items:center">
+          <span class="badge badge-available">${PMS.state.availableSlots().length} Available</span>
+          <span class="badge badge-occupied">${PMS.state.occupiedSlots().length} Occupied</span>
+          <span class="badge badge-oos">${PMS.state.oosSlots().length} Out of Service</span>
+        </div>
+      </div>
+      <div id="op-slots-map"></div>
+      <div style="margin-top:var(--space-4)">
+        <div class="card">
+          <div class="card-header"><div class="card-title">All Slots</div></div>
+          <div class="table-wrapper" style="border:none;box-shadow:none">
+            <table>
+              <thead><tr><th>Slot ID</th><th>Zone</th><th>Latitude</th><th>Longitude</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+              <tbody id="slots-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+    initOpMap();
+    renderSlotsTable();
+  }
+
+  function initOpMap() {
+    if (opMap) { opMap.remove(); opMap = null; opSlotMarkers = {}; }
+    opMap = L.map('op-slots-map').setView([0.3282, 32.6037], 18);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 21 }).addTo(opMap);
+    PMS.state.slots.forEach(slot => addOpSlotMarker(slot));
+    PMS.landmarks.forEach(lm => {
+      const color = lm.type==='ENTRY_GATE'?'#16a34a':lm.type==='EXIT_GATE'?'#dc2626':'#1a56db';
+      const icon  = L.divIcon({ className:'', html:`<div style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25);font-family:Inter,sans-serif">${lm.label}</div>`, iconAnchor:[0,0] });
+      L.marker([lm.lat,lm.lng],{icon}).addTo(opMap);
+    });
+    opMap.on('click', onOpMapClick);
+  }
+
+  function addOpSlotMarker(slot) {
+    const bg = slot.status==='AVAILABLE'?'#16a34a':slot.status==='OCCUPIED'?'#dc2626':'#6b7280';
+    const shape = slot.status==='AVAILABLE'
+      ? `<svg width="10" height="10" viewBox="0 0 10 10" style="display:block;margin:0 auto 2px"><circle cx="5" cy="5" r="4" fill="rgba(255,255,255,0.7)"/></svg>`
+      : slot.status==='OCCUPIED'
+      ? `<svg width="10" height="10" viewBox="0 0 10 10" style="display:block;margin:0 auto 2px"><rect x="1" y="1" width="8" height="8" rx="1" fill="rgba(255,255,255,0.7)"/></svg>`
+      : `<svg width="10" height="10" viewBox="0 0 10 10" style="display:block;margin:0 auto 2px"><polygon points="5,1 9,9 1,9" fill="rgba(255,255,255,0.7)"/></svg>`;
+    const icon = L.divIcon({ className:'', html:`<div aria-label="Slot ${slot.slotId} - ${slot.status}" role="button" tabindex="0" style="background:${bg};color:#fff;font-size:11px;font-weight:700;padding:4px 7px;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.3);font-family:'JetBrains Mono',monospace;text-align:center;min-width:36px;border:2px solid rgba(255,255,255,0.3)">${shape}${slot.slotId}</div>`, iconAnchor:[18,16] });
+    const marker = L.marker([slot.lat,slot.lng],{icon,draggable:true}).addTo(opMap);
+    marker.on('dragend', e => {
+      const ll = e.target.getLatLng();
+      slot.lat = parseFloat(ll.lat.toFixed(6));
+      slot.lng = parseFloat(ll.lng.toFixed(6));
+      PMS.toast('info','Slot repositioned',`${slot.slotId} moved to ${slot.lat.toFixed(5)}, ${slot.lng.toFixed(5)}`);
+      renderSlotsTable();
+    });
+    marker.on('click', () => { if (opMapMode==='view') showOpSlotPopup(slot, marker); });
+    opSlotMarkers[slot.slotId] = { slot, marker };
+  }
+
+  function showOpSlotPopup(slot, marker) {
+    const session = PMS.state.activeSessionForSlot(slot.slotId);
+    const isOos   = slot.status === 'OUT_OF_SERVICE';
+    const hasActive = !!session;
+    marker.bindPopup(`
+      <div style="font-family:Inter,sans-serif;min-width:180px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:8px">Slot ${slot.slotId}</div>
+        <div style="font-size:12px;color:#6b7280;margin-bottom:4px">Status: <strong style="color:${slot.status==='AVAILABLE'?'#16a34a':slot.status==='OCCUPIED'?'#dc2626':'#6b7280'}">${slot.status}</strong></div>
+        ${hasActive?`<div style="font-size:12px;color:#6b7280;margin-bottom:8px">Plate: <strong>${session.plateNumber}</strong></div>`:''}        <div style="display:flex;gap:6px;margin-top:8px">
+          <button onclick="toggleSlotOos('${slot.slotId}')" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:4px;border:none;cursor:pointer;background:${isOos?'#16a34a':'#dc2626'};color:#fff">${isOos?'Restore':'Mark OOS'}</button>
+        </div>
+      </div>`).openPopup();
+  }
+
+  function toggleSlotOos(slotId) {
+    const slot = PMS.state.getSlot(slotId);
+    if (!slot) return;
+    if (slot.status === 'OCCUPIED') {
+      showConfirmModal('Slot Has Active Session',`Slot ${slotId} has an active session. Mark it out of service anyway?`,() => doToggleOos(slot));
+      return;
+    }
+    doToggleOos(slot);
+  }
+
+  function doToggleOos(slot) {
+    const newStatus = slot.status === 'OUT_OF_SERVICE' ? 'AVAILABLE' : 'OUT_OF_SERVICE';
+    PMS.state.setSlotStatus(slot.slotId, newStatus);
+    PMS.toast(newStatus==='AVAILABLE'?'success':'warning', `Slot ${slot.slotId}`, newStatus==='AVAILABLE'?'Restored to service':'Marked out of service');
+    if (opMap) { const e = opSlotMarkers[slot.slotId]; if(e){opMap.removeLayer(e.marker); delete opSlotMarkers[slot.slotId]; addOpSlotMarker(slot);} }
+    renderSlotsTable();
+  }
+
+  function setMapMode(mode, btn) {
+    opMapMode = mode;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (opMap) opMap.getContainer().style.cursor = mode==='view' ? '' : 'crosshair';
+  }
+
+  function onOpMapClick(e) {
+    if (opMapMode === 'add') {
+      pendingLatLng = e.latlng;
+      const modal = document.getElementById('add-slot-modal');
+      document.getElementById('new-slot-coords').textContent = `GPS: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`;
+      const sel = document.getElementById('new-slot-dest');
+      sel.innerHTML = '<option value="">None</option>' + PMS.destinations.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+      document.getElementById('new-slot-id').value = '';
+      modal.classList.remove('hidden');
+    } else if (opMapMode === 'landmark') {
+      const label = prompt('Enter landmark label (e.g. Entry Gate, Food Court):');
+      if (!label) return;
+      const type  = prompt('Type: ENTRY_GATE, EXIT_GATE, or DESTINATION_POI') || 'DESTINATION_POI';
+      const lm = { id:'lm'+Date.now(), label, type:type.toUpperCase(), lat:parseFloat(e.latlng.lat.toFixed(6)), lng:parseFloat(e.latlng.lng.toFixed(6)) };
+      PMS.landmarks.push(lm);
+      const color = lm.type==='ENTRY_GATE'?'#16a34a':lm.type==='EXIT_GATE'?'#dc2626':'#1a56db';
+      const icon  = L.divIcon({ className:'', html:`<div style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25);font-family:Inter,sans-serif">${lm.label}</div>`, iconAnchor:[0,0] });
+      L.marker([lm.lat,lm.lng],{icon}).addTo(opMap);
+      PMS.toast('success','Landmark added', label);
+    }
+  }
+
+  function saveNewSlot() {
+    const slotId = document.getElementById('new-slot-id').value.trim().toUpperCase();
+    const destId = document.getElementById('new-slot-dest').value;
+    if (!slotId) { PMS.toast('error','Slot ID required','Enter a slot identifier like A1 or F3.'); return; }
+    if (PMS.state.getSlot(slotId)) { PMS.toast('error','Duplicate slot ID',`Slot ${slotId} already exists.`); return; }
+    /* Duplicate GPS check (within ~1m) */
+    const haversine = (la1,lo1,la2,lo2) => { const R=6371000,r=x=>x*Math.PI/180,dLa=r(la2-la1),dLo=r(lo2-lo1),a=Math.sin(dLa/2)**2+Math.cos(r(la1))*Math.cos(r(la2))*Math.sin(dLo/2)**2; return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); };
+    const dup = PMS.state.slots.find(s => haversine(pendingLatLng.lat,pendingLatLng.lng,s.lat,s.lng) < 1);
+    if (dup) { PMS.toast('warning','Duplicate GPS',`Slot ${dup.slotId} is already within 1m of this position.`); return; }
+    const newSlot = { id:'s'+Date.now(), slotId, label:slotId, lat:parseFloat(pendingLatLng.lat.toFixed(6)), lng:parseFloat(pendingLatLng.lng.toFixed(6)), status:'AVAILABLE', destinationId:destId||null };
+    PMS.state.slots.push(newSlot);
+    addOpSlotMarker(newSlot);
+    document.getElementById('add-slot-modal').classList.add('hidden');
+    PMS.toast('success','Slot added', slotId);
+    renderSlotsTable();
+  }
+
+  function renderSlotsTable() {
+    const tbody = document.getElementById('slots-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = PMS.state.slots.map(slot => {
+      const dest = PMS.state.getDestination(slot.destinationId);
+      return `<tr>
+        <td class="td-slot">${slot.slotId}</td>
+        <td style="font-size:var(--text-xs)">${dest?dest.name:'—'}</td>
+        <td style="font-family:var(--font-mono);font-size:var(--text-xs)">${slot.lat.toFixed(6)}</td>
+        <td style="font-family:var(--font-mono);font-size:var(--text-xs)">${slot.lng.toFixed(6)}</td>
+        <td><span class="badge ${slot.status==='AVAILABLE'?'badge-available':slot.status==='OCCUPIED'?'badge-occupied':'badge-oos'}">${slot.status}</span></td>
+        <td style="text-align:right">
+          <button class="btn btn-sm ${slot.status==='OUT_OF_SERVICE'?'btn-success':'btn-warning'}" onclick="toggleSlotOos('${slot.slotId}')">
+            ${slot.status==='OUT_OF_SERVICE'?'Restore':'Mark OOS'}
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  /* ── OPERATOR SESSION HISTORY ── */
+  function renderOpHistory() {
+    const el = document.getElementById('op-history-content');
+    if (!el) return;
+    if (!el.dataset.loaded) {
+      el.innerHTML = `<div style="padding:var(--space-6)"><div class="skeleton skeleton-title" style="margin-bottom:var(--space-2)"></div><div class="skeleton skeleton-text" style="width:30%;margin-bottom:var(--space-6)"></div><div class="table-wrapper">${Array(8).fill('<div class="skeleton-table-row"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>').join('')}</div></div>`;
+      setTimeout(() => { el.dataset.loaded = '1'; renderOpHistory(); }, 300);
+      return;
+    }
+    el.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between">
+        <div><div class="page-title">Session History</div><div class="page-subtitle">All vehicle sessions across all attendants</div></div>
+        <div class="live-indicator">LIVE</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4)">
+        <div class="search-input-wrapper" style="max-width:320px;width:100%">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="search-input" id="op-history-search" placeholder="Search plate or phone..." oninput="filterOpHistory(this.value)" />
+        </div>
+        <div style="font-size:var(--text-xs);color:var(--gray-500)" id="op-history-count"></div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Plate</th><th>Phone</th><th>Destination</th><th>Slot</th><th>Attendant</th><th>Entry</th><th>Exit</th><th>Duration</th><th>Status</th></tr></thead>
+          <tbody id="op-history-tbody"></tbody>
+        </table>
+      </div>`;
+    filterOpHistory('');
+  }
+
+  function filterOpHistory(term) {
+    const rows   = PMS.state.searchSessions(term);
+    const tbody  = document.getElementById('op-history-tbody');
+    const count  = document.getElementById('op-history-count');
+    if (!tbody) return;
+    count.textContent = `${rows.length} record${rows.length!==1?'s':''}`;
+    tbody.innerHTML = rows.map(s => {
+      const isActive = s.status==='ACTIVE';
+      const dur = isActive ? PMS.formatElapsed(s.entryTime) : (() => { const ms=new Date(s.exitTime)-new Date(s.entryTime),h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000); return `${h}h ${m}m`; })();
+      return `<tr>
+        <td class="td-plate">${s.plateNumber}</td>
+        <td style="font-size:var(--text-xs)">${s.driverPhone}</td>
+        <td style="font-size:var(--text-xs)">${s.destinationName}</td>
+        <td class="td-slot">${s.slotId}</td>
+        <td style="font-size:var(--text-xs);color:var(--gray-600)">${s.attendantName}</td>
+        <td style="font-size:var(--text-xs)">${PMS.formatDateTime(s.entryTime)}</td>
+        <td style="font-size:var(--text-xs);color:${isActive?'var(--gray-400)':'var(--gray-700)'}">${isActive?'—':PMS.formatDateTime(s.exitTime)}</td>
+        <td style="font-size:var(--text-xs);font-weight:600;color:${isActive?'var(--color-occupied)':'var(--gray-600)'}">${dur}</td>
+        <td><span class="badge ${isActive?'badge-active':'badge-closed'}">${isActive?'Active':'Closed'}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  /* ── BARRIER LOG ── */
+  function renderBarrierLog() {
+    const el = document.getElementById('barrierlog-content');
+    if (!el) return;
+    if (!el.dataset.loaded) {
+      el.innerHTML = `<div style="padding:var(--space-6)"><div class="skeleton skeleton-title" style="margin-bottom:var(--space-2)"></div><div class="skeleton skeleton-text" style="width:35%;margin-bottom:var(--space-6)"></div><div class="table-wrapper">${Array(8).fill('<div class="skeleton-table-row"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>').join('')}</div></div>`;
+      setTimeout(() => { el.dataset.loaded = '1'; renderBarrierLog(); }, 300);
+      return;
+    }
+    /* Generate barrier log from sessions */
+    const logs = [];
+    PMS.state.sessions.forEach(s => {
+      logs.push({ type:'ENTRY', plate:s.plateNumber, attendant:s.attendantName, slotId:s.slotId, time:s.entryTime, sessionId:s.id });
+      if (s.exitTime) logs.push({ type:'EXIT', plate:s.plateNumber, attendant:s.attendantName, slotId:s.slotId, time:s.exitTime, sessionId:s.id });
+    });
+    logs.sort((a,b) => new Date(b.time)-new Date(a.time));
+    el.innerHTML = `
+      <div class="page-header">
+        <div class="page-title">Barrier Log</div>
+        <div class="page-subtitle">Every barrier open event with attendant identity</div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Barrier</th><th>Plate Number</th><th>Slot</th><th>Attendant</th><th>Timestamp</th></tr></thead>
+          <tbody>
+            ${logs.map(l=>`<tr>
+              <td><span class="${l.type==='ENTRY'?'barrier-type-entry':'barrier-type-exit'}">${l.type}</span></td>
+              <td class="td-plate">${l.plate}</td>
+              <td class="td-slot">${l.slotId}</td>
+              <td style="font-size:var(--text-xs);color:var(--gray-600)">${l.attendant}</td>
+              <td style="font-size:var(--text-xs)">${PMS.formatDateTime(l.time)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+</script>
+</body>
+</html>
+</body>
+</html>
