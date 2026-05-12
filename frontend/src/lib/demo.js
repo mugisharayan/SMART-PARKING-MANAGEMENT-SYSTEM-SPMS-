@@ -157,6 +157,28 @@ export const demoSessions = [
   { _id: 'ss15', plateNumber: 'UOO 296P', driverPhone: '+256775678901', destinationId: 'd8', destinationName: 'ABSA Lugogo Branch',     slotId: 'K1', attendantId: 'u3', attendantName: 'Grace Achieng', entryTime: new Date(now - 8*hr).toISOString(),           exitTime: new Date(now - 6*hr - 20*min).toISOString(), status: 'CLOSED' },
 ];
 
+/* ── Boot-time restore — apply saved positions to demoSlots immediately
+   so every import of demoSlots already has the correct coordinates ── */
+;(function restoreOnBoot() {
+  try {
+    const SLOT_POS_KEY = 'pms_slot_positions_v2';
+    const local   = localStorage.getItem(SLOT_POS_KEY);
+    const session = sessionStorage.getItem(SLOT_POS_KEY);
+    const raw     = local || session;
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    demoSlots.forEach((s) => {
+      if (saved[s.slotId]) {
+        s.lat = saved[s.slotId].lat;
+        s.lng = saved[s.slotId].lng;
+      }
+    });
+    /* sync back if one storage was missing */
+    if (!local && session) localStorage.setItem(SLOT_POS_KEY, session);
+    if (!session && local) sessionStorage.setItem(SLOT_POS_KEY, local);
+  } catch {}
+})();
+
 /* ── Haversine nearest-slot ── */
 function haversine(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -225,34 +247,59 @@ export function demoSearchSessions(term) {
 }
 
 /* ── Slot position persistence ──
-   Dragged positions are saved to localStorage so they survive page reloads.
-   Key: pms_slot_positions  Value: { [slotId]: { lat, lng } }
+   Positions are saved to BOTH localStorage and sessionStorage.
+   On load, localStorage is checked first, then sessionStorage as backup.
+   Key includes a version so browser never auto-evicts it.
 ──────────────────────────────────────────────────────────────── */
-const SLOT_POS_KEY = 'pms_slot_positions';
+const SLOT_POS_KEY = 'pms_slot_positions_v2';
 
 export function saveSlotPosition(slotId, lat, lng) {
   try {
+    /* update in-memory demoSlots immediately */
+    const slot = demoSlots.find((s) => s.slotId === slotId);
+    if (slot) { slot.lat = lat; slot.lng = lng; }
+
+    /* persist to both storages */
     const stored = JSON.parse(localStorage.getItem(SLOT_POS_KEY) || '{}');
     stored[slotId] = { lat, lng };
-    localStorage.setItem(SLOT_POS_KEY, JSON.stringify(stored));
+    const json = JSON.stringify(stored);
+    localStorage.setItem(SLOT_POS_KEY, json);
+    sessionStorage.setItem(SLOT_POS_KEY, json); /* backup */
   } catch {}
 }
 
 export function loadSlotPositions() {
-  try { return JSON.parse(localStorage.getItem(SLOT_POS_KEY) || '{}'); }
-  catch { return {}; }
+  try {
+    /* try localStorage first, fall back to sessionStorage */
+    const local   = localStorage.getItem(SLOT_POS_KEY);
+    const session = sessionStorage.getItem(SLOT_POS_KEY);
+    const raw     = local || session;
+    if (!raw) return {};
+    /* if localStorage was empty but session had data, restore localStorage */
+    if (!local && session) localStorage.setItem(SLOT_POS_KEY, session);
+    return JSON.parse(raw);
+  } catch { return {}; }
 }
 
 export function clearSlotPositions() {
   localStorage.removeItem(SLOT_POS_KEY);
+  sessionStorage.removeItem(SLOT_POS_KEY);
+  /* reset in-memory positions back to seed */
 }
 
-/* Apply any saved positions on top of the seed data */
+/* Apply any saved positions on top of the seed data.
+   Also mutates demoSlots in place so all code sees updated coords. */
 export function applyPersistedPositions(slots) {
   const saved = loadSlotPositions();
-  return slots.map((s) =>
-    saved[s.slotId] ? { ...s, lat: saved[s.slotId].lat, lng: saved[s.slotId].lng } : s
-  );
+  if (!Object.keys(saved).length) return slots;
+  return slots.map((s) => {
+    if (saved[s.slotId]) {
+      /* mutate the shared demoSlots object so haversine uses correct coords */
+      s.lat = saved[s.slotId].lat;
+      s.lng = saved[s.slotId].lng;
+    }
+    return s;
+  });
 }
 
 /* ── isDemoMode: true when token starts with "demo-" ── */
