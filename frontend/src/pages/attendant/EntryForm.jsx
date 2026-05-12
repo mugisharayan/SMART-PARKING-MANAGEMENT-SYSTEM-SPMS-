@@ -7,6 +7,7 @@ import {
   demoCreateSession, demoActiveSessionForPlate,
 } from '../../lib/demo';
 import useAuthStore from '../../store/authStore';
+import CameraAnpr from '../../components/CameraAnpr';
 
 const UGANDA_PHONE    = /^(\+2567\d{8}|07\d{8})$/;
 const SAMPLE_PLATES   = ['UAA 123B', 'UBB 456C', 'UCC 789D', 'UDD 321E', 'UEE 654F', 'UGG 147H'];
@@ -224,14 +225,28 @@ export default function EntryForm() {
         <div className="card">
           <div className="card-body">
 
-            {/* ANPR box */}
-            <div className="anpr-box" style={{ marginBottom: 'var(--space-4)' }}>
-              <div className="anpr-scan-line" />
-              <div className={`anpr-status ${anprStatus === 'idle' ? 'scanning' : anprStatus}`}>
-                {anprStatus === 'scanning' ? 'Scanning...' : anprStatus === 'captured' ? 'Plate Captured' : 'Waiting for camera...'}
+            {/* Camera ANPR */}
+            {!confirmed && (
+              <div style={{ marginBottom: 'var(--space-4)' }}>
+                <CameraAnpr
+                  camera="entry"
+                  onPlateDetected={(p) => {
+                    setPlate(p);
+                    setErrors((e) => ({ ...e, plate: '' }));
+                    checkDuplicate(p);
+                  }}
+                />
               </div>
-              {anprPlate && <div className="anpr-plate">{anprPlate}</div>}
-            </div>
+            )}
+
+            {/* Demo simulate button — only in demo mode when camera not used */}
+            {isDemoMode() && !confirmed && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-3)' }}>
+                <button className="btn btn-outline btn-sm" onClick={simulate}>
+                  Simulate ANPR (Demo)
+                </button>
+              </div>
+            )}
 
             {/* duplicate plate warning */}
             {dupSession && !confirmed && (

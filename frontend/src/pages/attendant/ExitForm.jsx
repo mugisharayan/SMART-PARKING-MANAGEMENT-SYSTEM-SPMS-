@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../../lib/api';
 import { getSocket } from './AttendantLayout';
 import { isDemoMode, demoSessions, demoActiveSessionForPlate, demoCloseSession } from '../../lib/demo';
+import CameraAnpr from '../../components/CameraAnpr';
 
 const LONG_STAY_HOURS = 6;
 
@@ -256,30 +257,38 @@ export default function ExitForm() {
           <div className="card-body">
             <div style={{ maxWidth: 480, margin: '0 auto' }}>
 
-              {/* ANPR box — always visible so attendant sees barrier state */}
-              <div className="anpr-box" style={{ marginBottom: 'var(--space-4)' }}>
-                <div className="anpr-scan-line" />
-                <div className={`anpr-status ${anprStatus === 'idle' ? 'scanning' : anprStatus}`}>
-                  {anprStatus === 'scanning' ? 'Scanning exit lane...' : anprStatus === 'captured' ? 'Plate Captured' : 'Waiting for exit camera...'}
-                </div>
-                {anprPlate && <div className="anpr-plate">{anprPlate}</div>}
-              </div>
-
-              {/* plate input */}
-              <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-4)', alignItems: 'flex-end' }}>
-                <div style={{ flex: 1 }}>
-                  <label className="form-label">Plate Number <span className="required">*</span></label>
-                  <input
-                    className={`input${plateError ? ' error' : ''}`}
-                    value={plate}
-                    onChange={handlePlateChange}
-                    placeholder="e.g. UAA 123B"
-                    style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 700, letterSpacing: '0.1em' }}
+              {/* Camera ANPR */}
+              {!done && (
+                <div style={{ marginBottom: 'var(--space-4)' }}>
+                  <CameraAnpr
+                    camera="exit"
+                    onPlateDetected={(p) => {
+                      setPlate(p);
+                      setPlateError('');
+                      setDone(false);
+                      lookupSession(p);
+                    }}
                   />
                 </div>
-                {isDemoMode() && (
-                  <button className="btn btn-outline" onClick={simulate}>Simulate</button>
-                )}
+              )}
+
+              {/* Demo simulate — only in demo mode */}
+              {isDemoMode() && !done && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-3)' }}>
+                  <button className="btn btn-outline btn-sm" onClick={simulate}>Simulate ANPR (Demo)</button>
+                </div>
+              )}
+
+              {/* plate input */}
+              <div style={{ marginBottom: 'var(--space-4)' }}>
+                <label className="form-label">Plate Number <span className="required">*</span></label>
+                <input
+                  className={`input${plateError ? ' error' : ''}`}
+                  value={plate}
+                  onChange={handlePlateChange}
+                  placeholder="e.g. UAA 123B"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 700, letterSpacing: '0.1em' }}
+                />
               </div>
               {plateError && <div className="form-error" style={{ marginTop: -12, marginBottom: 'var(--space-3)' }}>{plateError}</div>}
 

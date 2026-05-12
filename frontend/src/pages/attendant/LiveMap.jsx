@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer } from 'react-leaflet';
 import { useMap } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../lib/api';
 import { getSocket } from './AttendantLayout';
-import { isDemoMode, demoSlots, demoSessions, demoDestinations, demoLandmarks } from '../../lib/demo';
+import { isDemoMode, demoSlots, demoSessions, applyPersistedPositions } from '../../lib/demo';
 
 /* ── helpers ── */
 function elapsed(entryTime) {
@@ -17,24 +17,22 @@ function elapsed(entryTime) {
 }
 
 const STATUS_COLOR = { AVAILABLE: '#16a34a', OCCUPIED: '#dc2626', OUT_OF_SERVICE: '#6b7280' };
-const ZONE_COLORS  = ['#1a56db', '#d97706', '#16a34a', '#7c3aed', '#0284c7', '#db2777', '#059669', '#ea580c'];
 
-function makeIcon(slot, session) {
+function makeIcon(slot) {
   const bg = STATUS_COLOR[slot.status] || '#6b7280';
   const shape =
     slot.status === 'AVAILABLE'
-      ? `<circle cx="5" cy="5" r="3" fill="rgba(255,255,255,0.75)"/>`
+      ? `<circle cx="4" cy="4" r="2.5" fill="rgba(255,255,255,0.75)"/>`
       : slot.status === 'OCCUPIED'
-      ? `<rect x="1" y="1" width="8" height="8" rx="1" fill="rgba(255,255,255,0.75)"/>`
-      : `<polygon points="5,1 9,9 1,9" fill="rgba(255,255,255,0.75)"/>`;
-  const elapsedStr = session ? `<div style="font-size:8px;opacity:.9;margin-top:1px">${elapsed(session.entryTime)}</div>` : '';
+      ? `<rect x="1" y="1" width="6" height="6" rx="1" fill="rgba(255,255,255,0.75)"/>`
+      : `<polygon points="4,0.5 7.5,7.5 0.5,7.5" fill="rgba(255,255,255,0.75)"/>`;
   return L.divIcon({
     className: '',
-    html: `<div style="background:${bg};color:#fff;font-size:11px;font-weight:700;padding:3px 6px 4px;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.28);font-family:'JetBrains Mono',monospace;text-align:center;min-width:34px;border:2px solid rgba(255,255,255,.35);cursor:pointer">
-      <svg width="10" height="10" viewBox="0 0 10 10" style="display:block;margin:0 auto 1px">${shape}</svg>
-      ${slot.slotId}${elapsedStr}
+    html: `<div style="background:${bg};color:#fff;font-size:9px;font-weight:700;padding:2px 4px 3px;border-radius:4px;box-shadow:0 1px 6px rgba(0,0,0,.28);font-family:'JetBrains Mono',monospace;text-align:center;min-width:24px;border:1.5px solid rgba(255,255,255,.35);cursor:pointer;line-height:1">
+      <svg width="8" height="8" viewBox="0 0 8 8" style="display:block;margin:0 auto 1px">${shape}</svg>
+      ${slot.slotId}
     </div>`,
-    iconAnchor: [17, 18],
+    iconAnchor: [12, 14],
   });
 }
 
@@ -58,7 +56,7 @@ function MarkersLayer({ slots, sessions, onSlotClick, searchTerm, statusFilter }
     markersRef.current = {};
     slots.forEach((slot) => {
       const session = sessionForSlot(slot.slotId);
-      const marker  = L.marker([slot.lat, slot.lng], { icon: makeIcon(slot, session) }).addTo(map);
+      const marker  = L.marker([slot.lat, slot.lng], { icon: makeIcon(slot) }).addTo(map);
       marker.on('click', () => onSlotClick(slot, sessionForSlot(slot.slotId)));
       markersRef.current[slot.slotId] = marker;
     });
@@ -75,7 +73,7 @@ function MarkersLayer({ slots, sessions, onSlotClick, searchTerm, statusFilter }
       const marker = markersRef.current[slot.slotId];
       if (!marker) return;
       const session = sessionForSlot(slot.slotId);
-      marker.setIcon(makeIcon(slot, session));
+      marker.setIcon(makeIcon(slot));
     });
   }, [sessions, sessionForSlot]);
 
@@ -103,7 +101,7 @@ function MarkersLayer({ slots, sessions, onSlotClick, searchTerm, statusFilter }
         if (slot.status !== 'OCCUPIED') return;
         const session = sessionForSlot(slot.slotId);
         const marker  = markersRef.current[slot.slotId];
-        if (marker && session) marker.setIcon(makeIcon(slot, session));
+        if (marker && session) marker.setIcon(makeIcon(slot));
       });
     }, 60000);
     return () => clearInterval(id);
@@ -112,116 +110,168 @@ function MarkersLayer({ slots, sessions, onSlotClick, searchTerm, statusFilter }
   return null;
 }
 
-function LandmarkLayer({ landmarks }) {
-  const map = useMap();
-  useEffect(() => {
-    const added = landmarks.map((lm) => {
-      const color = lm.type === 'ENTRY_GATE' ? '#16a34a' : lm.type === 'EXIT_GATE' ? '#dc2626' : '#1a56db';
-      const icon  = L.divIcon({
-        className: '',
-        html: `<div style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25)">${lm.label}</div>`,
-        iconAnchor: [0, 0],
-      });
-      return L.marker([lm.lat, lm.lng], { icon }).addTo(map);
-    });
-    return () => added.forEach((m) => m.remove());
-  }, [landmarks, map]);
-  return null;
-}
-
-/* ── Bottom sheet — slot detail ── */
+/* ── Slot detail popup — centred modal card ── */
 function SlotBottomSheet({ slot, session, onClose, onStartEntry }) {
   const formatTime = (d) =>
     d ? new Date(d).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+
+  const isAvailable = slot.status === 'AVAILABLE';
+  const isOccupied  = slot.status === 'OCCUPIED';
+  const isOos       = slot.status === 'OUT_OF_SERVICE';
+
+  const accentColor = isAvailable ? '#16a34a' : isOccupied ? '#dc2626' : '#6b7280';
+
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!isOccupied || !session) return;
+    const id = setInterval(() => setTick((t) => t + 1), 60000);
+    return () => clearInterval(id);
+  }, [isOccupied, session]);
 
   return (
     <>
       {/* backdrop */}
       <div
         onClick={onClose}
-        style={{ position: 'absolute', inset: 0, zIndex: 15, background: 'rgba(0,0,0,0.25)' }}
+        style={{
+          position: 'absolute', inset: 0, zIndex: 15,
+          background: 'rgba(0,0,0,0.45)',
+          backdropFilter: 'blur(3px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
       />
-      {/* sheet */}
+
+      {/* centred square card */}
       <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
-        background: 'var(--surface-card)', borderRadius: 'var(--radius-2xl) var(--radius-2xl) 0 0',
-        boxShadow: '0 -8px 32px rgba(0,0,0,0.18)', padding: 'var(--space-5) var(--space-6) var(--space-6)',
-        animation: 'slideUp 0.25s cubic-bezier(0.22,1,0.36,1)',
-        maxHeight: '55vh', overflowY: 'auto',
+        position: 'absolute',
+        top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 20,
+        width: 320,
+        background: '#fff',
+        borderRadius: 20,
+        boxShadow: '0 24px 64px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.06)',
+        overflow: 'hidden',
+        animation: 'scaleIn 0.2s cubic-bezier(0.22,1,0.36,1)',
       }}>
-        {/* drag handle */}
-        <div style={{ width: 40, height: 4, background: 'var(--gray-300)', borderRadius: 'var(--radius-full)', margin: '0 auto var(--space-4)' }} />
+        {/* accent top bar */}
+        <div style={{ height: 4, background: `linear-gradient(90deg, ${accentColor}, ${accentColor}88)` }} />
 
-        {/* header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 'var(--radius-lg)',
-              background: slot.status === 'AVAILABLE' ? 'var(--color-available-lt)' : slot.status === 'OCCUPIED' ? 'var(--color-occupied-lt)' : 'var(--color-oos-lt)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: 'var(--text-lg)',
-              color: slot.status === 'AVAILABLE' ? 'var(--color-available)' : slot.status === 'OCCUPIED' ? 'var(--color-occupied)' : 'var(--color-oos)',
-            }}>
-              {slot.slotId}
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--gray-900)' }}>Slot {slot.slotId}</div>
-              <span className={`badge ${slot.status === 'AVAILABLE' ? 'badge-available' : slot.status === 'OCCUPIED' ? 'badge-occupied' : 'badge-oos'}`}>
-                {slot.status === 'OUT_OF_SERVICE' ? 'Out of Service' : slot.status}
-              </span>
-            </div>
-          </div>
-          <button onClick={onClose} className="btn-ghost btn-icon btn-sm">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* available — show Start Entry button */}
-        {slot.status === 'AVAILABLE' && (
-          <button
-            className="btn btn-success btn-lg btn-block"
-            onClick={() => onStartEntry(slot)}
-            style={{ marginBottom: 'var(--space-3)' }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
-              <polyline points="10 17 15 12 10 7"/>
-              <line x1="15" y1="12" x2="3" y2="12"/>
-            </svg>
-            Start Entry for Slot {slot.slotId}
-          </button>
-        )}
-
-        {/* occupied — session details */}
-        {slot.status === 'OCCUPIED' && session && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {[
-              { k: 'Plate',       v: session.plateNumber,    mono: true  },
-              { k: 'Phone',       v: session.driverPhone                 },
-              { k: 'Destination', v: session.destinationName             },
-              { k: 'Entry',       v: formatTime(session.entryTime)       },
-              { k: 'Elapsed',     v: elapsed(session.entryTime), red: true },
-              { k: 'Attendant',   v: session.attendantName               },
-            ].map(({ k, v, mono, red }) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3) 0', borderBottom: '1px solid var(--gray-100)', fontSize: 'var(--text-sm)' }}>
-                <span style={{ color: 'var(--gray-500)', fontWeight: 500 }}>{k}</span>
-                <span style={{ fontWeight: 700, fontFamily: mono ? 'var(--font-mono)' : undefined, color: red ? 'var(--color-occupied)' : 'var(--gray-900)' }}>{v}</span>
+        <div style={{ padding: '18px 20px 22px' }}>
+          {/* header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* slot badge */}
+              <div style={{
+                width: 48, height: 48, borderRadius: 14,
+                background: `${accentColor}12`,
+                border: `2px solid ${accentColor}25`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-mono)', fontWeight: 900,
+                fontSize: 18, color: accentColor, letterSpacing: '-0.02em', flexShrink: 0,
+              }}>
+                {slot.slotId}
               </div>
-            ))}
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>Slot {slot.slotId}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: accentColor, boxShadow: `0 0 0 2px ${accentColor}30` }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: accentColor, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                    {isOos ? 'Out of Service' : isOccupied ? 'Occupied' : 'Available'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              style={{ width: 32, height: 32, borderRadius: 9, background: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280', flexShrink: 0 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
-        )}
 
-        {slot.status === 'OUT_OF_SERVICE' && (
-          <div className="alert alert-warning">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            This slot is out of service and cannot be assigned.
-          </div>
-        )}
+          {/* ── AVAILABLE ── */}
+          {isAvailable && (
+            <>
+              <div style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.15)', borderRadius: 12, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>Ready to assign</div>
+                  <div style={{ fontSize: 11, color: '#16a34a', marginTop: 1 }}>Free — no active session</div>
+                </div>
+              </div>
+              <button
+                onClick={() => onStartEntry(slot)}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                  background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)',
+                  color: '#fff', fontSize: 14, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  boxShadow: '0 4px 14px rgba(22,163,74,0.35)',
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 18px rgba(22,163,74,0.45)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 14px rgba(22,163,74,0.35)'; }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                Start Entry for Slot {slot.slotId}
+              </button>
+            </>
+          )}
+
+          {/* ── OCCUPIED ── */}
+          {isOccupied && session && (
+            <>
+              {/* elapsed hero */}
+              <div style={{
+                background: 'linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)',
+                borderRadius: 14, padding: '12px 16px', marginBottom: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                boxShadow: '0 4px 14px rgba(220,38,38,0.25)',
+              }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Time Parked</div>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1 }}>{elapsed(session.entryTime)}</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 3 }}>Since {formatTime(session.entryTime)}</div>
+                </div>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+              </div>
+              {/* detail grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  { icon: '🚗', label: 'Plate',       value: session.plateNumber,    mono: true,  full: false },
+                  { icon: '📞', label: 'Phone',       value: session.driverPhone,    mono: false, full: false },
+                  { icon: '📍', label: 'Destination', value: session.destinationName,mono: false, full: true  },
+                  { icon: '👤', label: 'Attendant',   value: session.attendantName,  mono: false, full: false },
+                ].map(({ icon, label, value, mono, full }) => (
+                  <div key={label} style={{
+                    gridColumn: full ? '1 / -1' : undefined,
+                    background: '#f9fafb', borderRadius: 10, padding: '8px 10px',
+                    border: '1px solid #f3f4f6',
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{icon} {label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#111827', fontFamily: mono ? 'var(--font-mono)' : undefined, letterSpacing: mono ? '0.05em' : undefined, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ── OUT OF SERVICE ── */}
+          {isOos && (
+            <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 3 }}>Slot Unavailable</div>
+                <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>Taken out of service by an operator. Cannot be assigned.</div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
@@ -230,11 +280,9 @@ function SlotBottomSheet({ slot, session, onClose, onStartEntry }) {
 /* ── Main ── */
 export default function LiveMap() {
   const navigate                                     = useNavigate();
-  const [slots,        setSlots]        = useState([]);
-  const [sessions,     setSessions]     = useState([]);
-  const [destinations, setDestinations] = useState([]);
-  const [landmarks,    setLandmarks]    = useState([]);
-  const [loading,      setLoading]      = useState(true);
+  const [slots,        setSlots]    = useState([]);
+  const [sessions,     setSessions] = useState([]);
+  const [loading,      setLoading]  = useState(true);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
   const [panelCollapsed, setPanelCollapsed]   = useState(false);
@@ -245,29 +293,20 @@ export default function LiveMap() {
   /* ── fetch — demo fallback ── */
   useEffect(() => {
     if (isDemoMode()) {
-      setSlots([...demoSlots]);
+      setSlots(applyPersistedPositions([...demoSlots]));
       setSessions(demoSessions.filter((s) => s.status === 'ACTIVE'));
-      setDestinations(demoDestinations);
-      setLandmarks(demoLandmarks);
       setLoading(false);
       return;
     }
     Promise.all([
       api.get('/api/slots'),
       api.get('/api/sessions?status=ACTIVE'),
-      api.get('/api/destinations'),
-      api.get('/api/landmarks'),
-    ]).then(([s, se, d, l]) => {
+    ]).then(([s, se]) => {
       setSlots(s.data);
       setSessions(Array.isArray(se.data) ? se.data : se.data.sessions || []);
-      setDestinations(d.data);
-      setLandmarks(l.data);
     }).catch(() => {
-      /* fallback to demo data if API unreachable */
-      setSlots([...demoSlots]);
+      setSlots(applyPersistedPositions([...demoSlots]));
       setSessions(demoSessions.filter((s) => s.status === 'ACTIVE'));
-      setDestinations(demoDestinations);
-      setLandmarks(demoLandmarks);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -329,22 +368,7 @@ export default function LiveMap() {
 
   const handleCloseSheet = useCallback(() => setSelectedSlot(null), []);
 
-  /* zone polygons — pad around each destination's slots.
-     Works even with a single slot (uses a fixed 15m pad square). */
-  const zonePolygons = destinations.map((dest, i) => {
-    const destSlots = slots.filter((s) => s.destinationId === (dest._id || dest.id));
-    if (!destSlots.length) return null;
-    const lats = destSlots.map((s) => s.lat);
-    const lngs = destSlots.map((s) => s.lng);
-    const pad  = 0.00013; /* ~15 m */
-    const bounds = [
-      [Math.max(...lats) + pad, Math.min(...lngs) - pad],
-      [Math.max(...lats) + pad, Math.max(...lngs) + pad],
-      [Math.min(...lats) - pad, Math.max(...lngs) + pad],
-      [Math.min(...lats) - pad, Math.min(...lngs) - pad],
-    ];
-    return { dest, bounds, color: ZONE_COLORS[i % ZONE_COLORS.length] };
-  }).filter(Boolean);
+  /* zone polygons removed */
 
   if (loading) {
     return (
@@ -358,7 +382,7 @@ export default function LiveMap() {
   return (
     <div style={{ position: 'relative', height: 'calc(100vh - var(--topbar-height))', overflow: 'hidden' }}>
       <MapContainer
-        center={[0.3317, 32.5935]}
+        center={[0.326689, 32.606920]}
         zoom={18}
         zoomControl={false}
         ref={mapRef}
@@ -370,14 +394,6 @@ export default function LiveMap() {
           maxZoom={21}
         />
 
-        {zonePolygons.map(({ dest, bounds, color }) => (
-          <Polygon
-            key={dest._id || dest.id}
-            positions={bounds}
-            pathOptions={{ color, fillColor: color, fillOpacity: 0.07, weight: 1.5, dashArray: '5 5', opacity: 0.45 }}
-          />
-        ))}
-
         <MarkersLayer
           slots={slots}
           sessions={sessions}
@@ -385,7 +401,6 @@ export default function LiveMap() {
           searchTerm={searchTerm}
           statusFilter={statusFilter}
         />
-        <LandmarkLayer landmarks={landmarks} />
       </MapContainer>
 
       {/* ── Floating search top-left ── */}
@@ -482,24 +497,7 @@ export default function LiveMap() {
               </div>
             </div>
 
-            {/* slot detail moved to bottom sheet — click any marker to open */}
 
-            <div style={{ height: 1, background: 'rgba(0,0,0,0.07)', margin: 'var(--space-3) 0' }} />
-
-            {/* zone legend removed — polygons on map already show zone colours + labels */}
-
-            {/* marker legend — collapsed into a help tooltip */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-              <div style={{ position: 'relative', display: 'inline-flex' }} className="legend-help">
-                <button
-                  style={{ width: 20, height: 20, borderRadius: '50%', border: '1.5px solid var(--gray-300)', background: 'var(--gray-50)', fontSize: '0.65rem', fontWeight: 700, color: 'var(--gray-500)', cursor: 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  title="Green = Available · Red = Occupied · Grey = Out of Service"
-                >
-                  ?
-                </button>
-              </div>
-              <span style={{ fontSize: '0.65rem', color: 'var(--gray-400)' }}>Hover ? for legend</span>
-            </div>
           </div>
         )}
       </div>
