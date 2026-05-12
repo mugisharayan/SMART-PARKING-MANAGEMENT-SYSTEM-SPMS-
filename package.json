@@ -1,6 +1,16 @@
 {
+  "name": "spms-root",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm start --prefix frontend\"",
+    "start:backend": "npm start --prefix backend",
+    "start:frontend": "npm start --prefix frontend"
+  },
   "dependencies": {
     "axios": "^1.16.0",
     "mongodb": "^7.2.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
