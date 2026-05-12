@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../lib/api';
-import { isDemoMode, demoSlots, demoDestinations, demoLandmarks } from '../../lib/demo';
+import { isDemoMode, demoSlots, demoDestinations, demoLandmarks, saveSlotPosition, applyPersistedPositions, clearSlotPositions } from '../../lib/demo';
 
 /* ── helpers ── */
 function haversine(la1, lo1, la2, lo2) {
@@ -18,16 +18,16 @@ const STATUS_COLOR = { AVAILABLE: '#16a34a', OCCUPIED: '#dc2626', OUT_OF_SERVICE
 function makeSlotIcon(slot) {
   const bg    = STATUS_COLOR[slot.status] || '#6b7280';
   const shape = slot.status === 'AVAILABLE'
-    ? `<circle cx="5" cy="5" r="3.5" fill="rgba(255,255,255,0.75)"/>`
+    ? `<circle cx="4" cy="4" r="2.5" fill="rgba(255,255,255,0.75)"/>`
     : slot.status === 'OCCUPIED'
-    ? `<rect x="1" y="1" width="8" height="8" rx="1" fill="rgba(255,255,255,0.75)"/>`
-    : `<polygon points="5,1 9,9 1,9" fill="rgba(255,255,255,0.75)"/>`;
+    ? `<rect x="1" y="1" width="6" height="6" rx="1" fill="rgba(255,255,255,0.75)"/>`
+    : `<polygon points="4,0.5 7.5,7.5 0.5,7.5" fill="rgba(255,255,255,0.75)"/>`;
   return L.divIcon({
     className: '',
-    html: `<div style="background:${bg};color:#fff;font-size:11px;font-weight:700;padding:4px 7px;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.3);font-family:'JetBrains Mono',monospace;text-align:center;min-width:36px;border:2px solid rgba(255,255,255,.3)">
-      <svg width="10" height="10" viewBox="0 0 10 10" style="display:block;margin:0 auto 2px">${shape}</svg>${slot.slotId}
+    html: `<div style="background:${bg};color:#fff;font-size:9px;font-weight:700;padding:2px 4px 3px;border-radius:4px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-family:'JetBrains Mono',monospace;text-align:center;min-width:24px;border:1.5px solid rgba(255,255,255,.3);line-height:1">
+      <svg width="8" height="8" viewBox="0 0 8 8" style="display:block;margin:0 auto 2px">${shape}</svg>${slot.slotId}
     </div>`,
-    iconAnchor: [18, 16],
+    iconAnchor: [12, 13],
   });
 }
 
@@ -48,7 +48,10 @@ function SlotMapLayer({ slots, destinations, landmarks, mode, onSlotClick, onMap
         const ll = e.target.getLatLng();
         slot.lat = parseFloat(ll.lat.toFixed(6));
         slot.lng = parseFloat(ll.lng.toFixed(6));
-        if (!isDemoMode()) {
+        /* persist so position survives page reload */
+        if (isDemoMode()) {
+          saveSlotPosition(slot.slotId, slot.lat, slot.lng);
+        } else {
           api.patch(`/api/slots/${slot._id || slot.id}`, { lat: slot.lat, lng: slot.lng }).catch(() => {});
         }
       });
@@ -57,17 +60,7 @@ function SlotMapLayer({ slots, destinations, landmarks, mode, onSlotClick, onMap
     return () => { Object.values(markersRef.current).forEach((m) => m.remove()); markersRef.current = {}; };
   }, [slots, map, mode, onSlotClick]);
 
-  /* landmark markers */
-  useEffect(() => {
-    landmarkRef.current.forEach((m) => m.remove());
-    landmarkRef.current = [];
-    landmarks.forEach((lm) => {
-      const color = lm.type === 'ENTRY_GATE' ? '#16a34a' : lm.type === 'EXIT_GATE' ? '#dc2626' : '#1a56db';
-      const icon  = L.divIcon({ className: '', html: `<div style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25)">${lm.label}</div>`, iconAnchor: [0, 0] });
-      landmarkRef.current.push(L.marker([lm.lat, lm.lng], { icon }).addTo(map));
-    });
-    return () => { landmarkRef.current.forEach((m) => m.remove()); landmarkRef.current = []; };
-  }, [landmarks, map]);
+  /* landmark markers — removed, no overlays on map */
 
   /* map click */
   useEffect(() => {
@@ -214,7 +207,7 @@ function ResetViewControl() {
   return (
     <div style={{ position: 'absolute', top: 'var(--space-3)', right: 'var(--space-3)', zIndex: 10 }}>
       <button
-        onClick={() => map.flyTo([0.3317, 32.5935], 18, { animate: true, duration: 0.8 })}
+        onClick={() => map.flyTo([0.326689, 32.606920], 18, { animate: true, duration: 0.8 })}
         style={{
           background: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(10px)',
           border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius-md)',
@@ -248,7 +241,7 @@ export default function SlotLayout() {
 
   const load = useCallback(async () => {
     if (isDemoMode()) {
-      setSlots([...demoSlots]);
+      setSlots(applyPersistedPositions([...demoSlots]));
       setDestinations([...demoDestinations]);
       setLandmarks([...demoLandmarks]);
       setLoading(false);
@@ -385,6 +378,14 @@ export default function SlotLayout() {
           <span className="badge badge-available">{available} Available</span>
           <span className="badge badge-occupied">{occupied} Occupied</span>
           <span className="badge badge-oos">{oos} OOS</span>
+          <button
+            className="btn btn-outline-gray btn-sm"
+            onClick={() => { clearSlotPositions(); load(); toast('info', 'Positions reset', 'All slots returned to default positions.'); }}
+            title="Reset all slot positions to defaults"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+            Reset Positions
+          </button>
         </div>
       </div>
 
@@ -393,7 +394,7 @@ export default function SlotLayout() {
         <div className="skeleton" style={{ height: 420, borderRadius: 'var(--radius-xl)' }} />
       ) : (
         <div style={{ height: 420, borderRadius: 'var(--radius-xl)', overflow: 'hidden', border: '1px solid var(--gray-200)', position: 'relative' }}>
-          <MapContainer center={[0.3317, 32.5935]} zoom={18} zoomControl style={{ height: '100%', width: '100%' }}>
+          <MapContainer center={[0.326689, 32.606920]} zoom={18} zoomControl style={{ height: '100%', width: '100%' }}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" maxZoom={21} />
             <SlotMapLayer
               slots={slots}
