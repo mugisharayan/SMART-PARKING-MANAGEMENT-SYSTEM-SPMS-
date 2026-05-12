@@ -37,7 +37,7 @@
 
   --surface-bg:      #f0f4f8;
   --surface-card:    #ffffff;
-  --surface-sidebar: #0f172a;
+  --surface-sidebar: #1e40af;
   --surface-topbar:  #ffffff;
 
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -201,8 +201,8 @@ h1,h2,h3,h4,h5,h6 { font-weight: var(--weight-semibold); line-height: var(--lead
   width: 100%;
   text-align: left;
 }
-.nav-item:hover { color: #fff; background: rgba(255,255,255,0.06); }
-.nav-item.active { color: #fff; background: rgba(26,86,219,0.25); }
+.nav-item:hover { color: #fff; background: rgba(255,255,255,0.12); }
+.nav-item.active { color: #fff; background: rgba(255,255,255,0.18); }
 .nav-item.active::before {
   content: '';
   position: absolute;

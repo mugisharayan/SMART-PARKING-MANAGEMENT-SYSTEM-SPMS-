@@ -1,2 +1,510 @@
-function SlotLayout() { return <div className="p-8 text-xl font-bold">Slot Layout — coming in Phase 6</div>; }
-export default SlotLayout;
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import api from '../../lib/api';
+import { isDemoMode, demoSlots, demoDestinations, demoLandmarks } from '../../lib/demo';
+
+/* ── helpers ── */
+function haversine(la1, lo1, la2, lo2) {
+  const R = 6371000, r = (x) => (x * Math.PI) / 180;
+  const dLa = r(la2 - la1), dLo = r(lo2 - lo1);
+  const a = Math.sin(dLa / 2) ** 2 + Math.cos(r(la1)) * Math.cos(r(la2)) * Math.sin(dLo / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const STATUS_COLOR = { AVAILABLE: '#16a34a', OCCUPIED: '#dc2626', OUT_OF_SERVICE: '#6b7280' };
+
+function makeSlotIcon(slot) {
+  const bg    = STATUS_COLOR[slot.status] || '#6b7280';
+  const shape = slot.status === 'AVAILABLE'
+    ? `<circle cx="5" cy="5" r="3.5" fill="rgba(255,255,255,0.75)"/>`
+    : slot.status === 'OCCUPIED'
+    ? `<rect x="1" y="1" width="8" height="8" rx="1" fill="rgba(255,255,255,0.75)"/>`
+    : `<polygon points="5,1 9,9 1,9" fill="rgba(255,255,255,0.75)"/>`;
+  return L.divIcon({
+    className: '',
+    html: `<div style="background:${bg};color:#fff;font-size:11px;font-weight:700;padding:4px 7px;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.3);font-family:'JetBrains Mono',monospace;text-align:center;min-width:36px;border:2px solid rgba(255,255,255,.3)">
+      <svg width="10" height="10" viewBox="0 0 10 10" style="display:block;margin:0 auto 2px">${shape}</svg>${slot.slotId}
+    </div>`,
+    iconAnchor: [18, 16],
+  });
+}
+
+/* ── Map layer — manages all slot markers imperatively ── */
+function SlotMapLayer({ slots, destinations, landmarks, mode, onSlotClick, onMapClick }) {
+  const map         = useMap();
+  const markersRef  = useRef({});
+  const landmarkRef = useRef([]);
+
+  /* slot markers */
+  useEffect(() => {
+    Object.values(markersRef.current).forEach((m) => m.remove());
+    markersRef.current = {};
+    slots.forEach((slot) => {
+      const marker = L.marker([slot.lat, slot.lng], { icon: makeSlotIcon(slot), draggable: true }).addTo(map);
+      marker.on('click', () => { if (mode === 'view') onSlotClick(slot, marker); });
+      marker.on('dragend', (e) => {
+        const ll = e.target.getLatLng();
+        slot.lat = parseFloat(ll.lat.toFixed(6));
+        slot.lng = parseFloat(ll.lng.toFixed(6));
+        if (!isDemoMode()) {
+          api.patch(`/api/slots/${slot._id || slot.id}`, { lat: slot.lat, lng: slot.lng }).catch(() => {});
+        }
+      });
+      markersRef.current[slot.slotId] = marker;
+    });
+    return () => { Object.values(markersRef.current).forEach((m) => m.remove()); markersRef.current = {}; };
+  }, [slots, map, mode, onSlotClick]);
+
+  /* landmark markers */
+  useEffect(() => {
+    landmarkRef.current.forEach((m) => m.remove());
+    landmarkRef.current = [];
+    landmarks.forEach((lm) => {
+      const color = lm.type === 'ENTRY_GATE' ? '#16a34a' : lm.type === 'EXIT_GATE' ? '#dc2626' : '#1a56db';
+      const icon  = L.divIcon({ className: '', html: `<div style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25)">${lm.label}</div>`, iconAnchor: [0, 0] });
+      landmarkRef.current.push(L.marker([lm.lat, lm.lng], { icon }).addTo(map));
+    });
+    return () => { landmarkRef.current.forEach((m) => m.remove()); landmarkRef.current = []; };
+  }, [landmarks, map]);
+
+  /* map click */
+  useEffect(() => {
+    map.getContainer().style.cursor = mode === 'view' ? '' : 'crosshair';
+    const handler = (e) => { if (mode !== 'view') onMapClick(e.latlng, mode); };
+    map.on('click', handler);
+    return () => map.off('click', handler);
+  }, [map, mode, onMapClick]);
+
+  return null;
+}
+
+/* ── Add Slot Modal ── */
+function AddSlotModal({ latlng, destinations, slots, onSave, onCancel }) {
+  const [slotId,  setSlotId]  = useState('');
+  const [destId,  setDestId]  = useState('');
+  const [error,   setError]   = useState('');
+
+  const handleSave = () => {
+    const id = slotId.trim().toUpperCase();
+    if (!id) { setError('Slot ID is required.'); return; }
+    if (slots.find((s) => s.slotId === id)) { setError(`Slot ${id} already exists.`); return; }
+    const dup = slots.find((s) => haversine(latlng.lat, latlng.lng, s.lat, s.lng) < 1);
+    if (dup) { setError(`Slot ${dup.slotId} is already within 1m of this position.`); return; }
+    onSave({ slotId: id, destinationId: destId || null, lat: parseFloat(latlng.lat.toFixed(6)), lng: parseFloat(latlng.lng.toFixed(6)) });
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="modal modal-sm">
+        <div className="modal-header">
+          <div className="modal-title">Add New Slot</div>
+          <button className="modal-close" onClick={onCancel}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <label className="form-label">Slot ID <span className="required">*</span></label>
+            <input className={`input${error ? ' error' : ''}`} value={slotId}
+              onChange={(e) => { setSlotId(e.target.value.toUpperCase()); setError(''); }}
+              placeholder="e.g. F1" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }} />
+            {error && <div className="form-error">{error}</div>}
+          </div>
+          <div className="form-group" style={{ marginTop: 'var(--space-4)' }}>
+            <label className="form-label">Destination Zone</label>
+            <select className="select" value={destId} onChange={(e) => setDestId(e.target.value)}>
+              <option value="">None</option>
+              {destinations.map((d) => <option key={d._id || d.id} value={d._id || d.id}>{d.name}</option>)}
+            </select>
+          </div>
+          <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--gray-500)', fontFamily: 'var(--font-mono)' }}>
+            GPS: {latlng.lat.toFixed(6)}, {latlng.lng.toFixed(6)}
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-outline-gray" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>Add Slot</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Add Landmark Modal ── */
+function AddLandmarkModal({ latlng, onSave, onCancel }) {
+  const [label, setLabel] = useState('');
+  const [type,  setType]  = useState('DESTINATION_POI');
+  const [error, setError] = useState('');
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="modal modal-sm">
+        <div className="modal-header">
+          <div className="modal-title">Add Landmark</div>
+          <button className="modal-close" onClick={onCancel}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <label className="form-label">Label <span className="required">*</span></label>
+            <input className={`input${error ? ' error' : ''}`} value={label} onChange={(e) => { setLabel(e.target.value); setError(''); }} placeholder="e.g. Entry Gate" />
+            {error && <div className="form-error">{error}</div>}
+          </div>
+          <div className="form-group" style={{ marginTop: 'var(--space-4)' }}>
+            <label className="form-label">Type</label>
+            <select className="select" value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="ENTRY_GATE">Entry Gate</option>
+              <option value="EXIT_GATE">Exit Gate</option>
+              <option value="DESTINATION_POI">Destination POI</option>
+            </select>
+          </div>
+          <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--gray-500)', fontFamily: 'var(--font-mono)' }}>
+            GPS: {latlng.lat.toFixed(6)}, {latlng.lng.toFixed(6)}
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-outline-gray" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => { if (!label.trim()) { setError('Label required.'); return; } onSave({ label: label.trim(), type, lat: parseFloat(latlng.lat.toFixed(6)), lng: parseFloat(latlng.lng.toFixed(6)) }); }}>Add Landmark</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Confirm modal ── */
+function ConfirmModal({ title, text, onOk, onCancel }) {
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="modal modal-sm">
+        <div className="modal-header"><div className="modal-title">{title}</div><button className="modal-close" onClick={onCancel}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div className="modal-body"><p style={{ fontSize: 'var(--text-sm)', color: 'var(--gray-700)', lineHeight: 'var(--leading-relaxed)' }}>{text}</p></div>
+        <div className="modal-footer"><button className="btn btn-outline-gray" onClick={onCancel}>Cancel</button><button className="btn btn-danger" onClick={onOk}>Confirm</button></div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Toast ── */
+function useToast() {
+  const [toasts, setToasts] = useState([]);
+  const add = useCallback((type, title, msg = '') => {
+    const id = Date.now();
+    setToasts((p) => [...p, { id, type, title, msg }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
+  }, []);
+  return { toasts, add };
+}
+function ToastContainer({ toasts }) {
+  return toasts.length ? (
+    <div className="toast-container">
+      {toasts.map(({ id, type, title, msg }) => (
+        <div key={id} className={`toast ${type}`}>
+          <div className="toast-content"><div className="toast-title">{title}</div>{msg && <div className="toast-message">{msg}</div>}</div>
+        </div>
+      ))}
+    </div>
+  ) : null;
+}
+
+/* ── Reset view control ── */
+function ResetViewControl() {
+  const map = useMap();
+  return (
+    <div style={{ position: 'absolute', top: 'var(--space-3)', right: 'var(--space-3)', zIndex: 10 }}>
+      <button
+        onClick={() => map.flyTo([0.3317, 32.5935], 18, { animate: true, duration: 0.8 })}
+        style={{
+          background: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(10px)',
+          border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius-md)',
+          padding: '6px 10px', fontSize: 'var(--text-xs)', fontWeight: 600,
+          color: 'var(--gray-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+        </svg>
+        Reset View
+      </button>
+    </div>
+  );
+}
+
+/* ── Main ── */
+export default function SlotLayout() {
+  const [slots,        setSlots]        = useState([]);
+  const [destinations, setDestinations] = useState([]);
+  const [landmarks,    setLandmarks]    = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [mode,         setMode]         = useState('view');
+  const [addSlotData,  setAddSlotData]  = useState(null);
+  const [addLmData,    setAddLmData]    = useState(null);
+  const [confirm,      setConfirm]      = useState(null);
+  const [zoneFilter,   setZoneFilter]   = useState('ALL');  // S1: zone filter
+  const [collapsed,    setCollapsed]    = useState({});     // S1: collapsed zone groups
+  const { toasts, add: toast } = useToast();
+
+  const load = useCallback(async () => {
+    if (isDemoMode()) {
+      setSlots([...demoSlots]);
+      setDestinations([...demoDestinations]);
+      setLandmarks([...demoLandmarks]);
+      setLoading(false);
+      return;
+    }
+    try {
+      const [s, d, l] = await Promise.all([api.get('/api/slots'), api.get('/api/destinations'), api.get('/api/landmarks')]);
+      setSlots(s.data); setDestinations(d.data); setLandmarks(l.data);
+    } catch {
+      setSlots([...demoSlots]); setDestinations([...demoDestinations]); setLandmarks([...demoLandmarks]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleMapClick = useCallback((latlng, clickMode) => {
+    if (clickMode === 'add')      setAddSlotData({ latlng });
+    if (clickMode === 'landmark') setAddLmData({ latlng });
+  }, []);
+
+  const handleSlotClick = useCallback((slot, marker) => {
+    const isOos = slot.status === 'OUT_OF_SERVICE';
+    marker.bindPopup(`
+      <div style="font-family:Inter,sans-serif;min-width:180px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:8px">Slot ${slot.slotId}</div>
+        <div style="font-size:12px;color:#6b7280;margin-bottom:8px">Status: <strong style="color:${STATUS_COLOR[slot.status]}">${slot.status}</strong></div>
+        <button id="oos-btn-${slot.slotId}" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:4px;border:none;cursor:pointer;background:${isOos ? '#16a34a' : '#dc2626'};color:#fff">
+          ${isOos ? 'Restore' : 'Mark OOS'}
+        </button>
+      </div>
+    `).openPopup();
+    setTimeout(() => {
+      const btn = document.getElementById(`oos-btn-${slot.slotId}`);
+      if (btn) btn.onclick = () => { marker.closePopup(); handleToggleOos(slot); };
+    }, 50);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleToggleOos = (slot) => {
+    const doToggle = async () => {
+      const newStatus = slot.status === 'OUT_OF_SERVICE' ? 'AVAILABLE' : 'OUT_OF_SERVICE';
+      if (isDemoMode()) {
+        slot.status = newStatus;
+      } else {
+        try { await api.patch(`/api/slots/${slot._id || slot.id}`, { status: newStatus }); }
+        catch (err) { toast('error', 'Update failed', err.response?.data?.message || ''); return; }
+      }
+      toast(newStatus === 'AVAILABLE' ? 'success' : 'warning', `Slot ${slot.slotId}`, newStatus === 'AVAILABLE' ? 'Restored to service' : 'Marked out of service');
+      setConfirm(null);
+      setSlots((prev) => prev.map((s) => s.slotId === slot.slotId ? { ...s, status: newStatus } : s));
+    };
+
+    if (slot.status === 'OCCUPIED') {
+      setConfirm({ title: 'Slot Has Active Session', text: `Slot ${slot.slotId} has an active session. Mark it out of service anyway?`, onOk: doToggle });
+    } else {
+      doToggle();
+    }
+  };
+
+  const handleSaveSlot = async ({ slotId, destinationId, lat, lng }) => {
+    const newSlot = { _id: 's' + Date.now(), id: 's' + Date.now(), slotId, label: slotId, lat, lng, status: 'AVAILABLE', destinationId };
+    if (isDemoMode()) {
+      demoSlots.push(newSlot);
+    } else {
+      try { const { data } = await api.post('/api/slots', { slotId, label: slotId, lat, lng, destinationId }); newSlot._id = data._id; }
+      catch (err) { toast('error', 'Failed to add slot', err.response?.data?.message || ''); return; }
+    }
+    setSlots((prev) => [...prev, newSlot]);
+    setAddSlotData(null);
+    toast('success', 'Slot added', slotId);
+  };
+
+  const handleSaveLandmark = async ({ label, type, lat, lng }) => {
+    const lm = { _id: 'lm' + Date.now(), label, type, lat, lng };
+    if (isDemoMode()) {
+      demoLandmarks.push(lm);
+    } else {
+      try { await api.post('/api/landmarks', { label, type, lat, lng }); }
+      catch (err) { toast('error', 'Failed to add landmark', err.response?.data?.message || ''); return; }
+    }
+    setLandmarks((prev) => [...prev, lm]);
+    setAddLmData(null);
+    toast('success', 'Landmark added', label);
+  };
+
+  const modeButtons = [
+    { key: 'view',     label: 'View',         icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> },
+    { key: 'add',      label: 'Add Slot',     icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> },
+    { key: 'landmark', label: 'Add Landmark', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> },
+  ];
+
+  const available = slots.filter((s) => s.status === 'AVAILABLE').length;
+  const occupied  = slots.filter((s) => s.status === 'OCCUPIED').length;
+  const oos       = slots.filter((s) => s.status === 'OUT_OF_SERVICE').length;
+
+  return (
+    <div className="page-content">
+      <ToastContainer toasts={toasts} />
+      {confirm    && <ConfirmModal {...confirm} onCancel={() => setConfirm(null)} />}
+      {addSlotData && <AddSlotModal latlng={addSlotData.latlng} destinations={destinations} slots={slots} onSave={handleSaveSlot} onCancel={() => setAddSlotData(null)} />}
+      {addLmData   && <AddLandmarkModal latlng={addLmData.latlng} onSave={handleSaveLandmark} onCancel={() => setAddLmData(null)} />}
+
+      <div className="page-header">
+        <div className="page-title">Slot Layout Management</div>
+        <div className="page-subtitle">Click the map to place slots. Drag markers to reposition.</div>
+      </div>
+
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
+        {/* mode pill buttons */}
+        <div style={{ display: 'flex', background: 'var(--gray-100)', borderRadius: 'var(--radius-md)', padding: 3, gap: 2 }}>
+          {modeButtons.map(({ key, label, icon }) => (
+            <button key={key} onClick={() => setMode(key)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+                background: mode === key ? 'var(--surface-card)' : 'transparent',
+                color: mode === key ? 'var(--brand-primary)' : 'var(--gray-500)',
+                fontWeight: mode === key ? 700 : 500, fontSize: 'var(--text-sm)',
+                boxShadow: mode === key ? 'var(--shadow-xs)' : 'none',
+                transition: 'all var(--transition-fast)',
+              }}>
+              {icon}{label}
+            </button>
+          ))}
+        </div>
+        {mode !== 'view' && (
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-primary)', fontWeight: 600, background: 'var(--brand-primary-lt)', padding: '4px 10px', borderRadius: 'var(--radius-full)' }}>
+            {mode === 'add' ? 'Click map to place a slot' : 'Click map to place a landmark'}
+          </span>
+        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+          <span className="badge badge-available">{available} Available</span>
+          <span className="badge badge-occupied">{occupied} Occupied</span>
+          <span className="badge badge-oos">{oos} OOS</span>
+        </div>
+      </div>
+
+      {/* Map */}
+      {loading ? (
+        <div className="skeleton" style={{ height: 420, borderRadius: 'var(--radius-xl)' }} />
+      ) : (
+        <div style={{ height: 420, borderRadius: 'var(--radius-xl)', overflow: 'hidden', border: '1px solid var(--gray-200)', position: 'relative' }}>
+          <MapContainer center={[0.3317, 32.5935]} zoom={18} zoomControl style={{ height: '100%', width: '100%' }}>
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" maxZoom={21} />
+            <SlotMapLayer
+              slots={slots}
+              destinations={destinations}
+              landmarks={landmarks}
+              mode={mode}
+              onSlotClick={handleSlotClick}
+              onMapClick={handleMapClick}
+            />
+            <ResetViewControl />
+          </MapContainer>
+          {/* floating slot count pill */}
+          <div style={{
+            position: 'absolute', bottom: 'var(--space-3)', left: '50%', transform: 'translateX(-50%)',
+            zIndex: 10, background: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(10px)',
+            borderRadius: 'var(--radius-full)', padding: '6px 16px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.12)', display: 'flex', gap: 'var(--space-4)', alignItems: 'center',
+            fontSize: 'var(--text-xs)', fontWeight: 600, pointerEvents: 'none',
+          }}>
+            <span style={{ color: 'var(--color-available)' }}>{available} free</span>
+            <span style={{ color: 'var(--gray-300)' }}>|</span>
+            <span style={{ color: 'var(--color-occupied)' }}>{occupied} taken</span>
+            <span style={{ color: 'var(--gray-300)' }}>|</span>
+            <span style={{ color: 'var(--color-oos)' }}>{oos} OOS</span>
+          </div>
+        </div>
+      )}
+
+      {/* Slots table — grouped by zone with filter pills */}
+      <div className="card" style={{ marginTop: 'var(--space-4)' }}>
+        <div className="card-header">
+          <div className="card-title">All Slots</div>
+          {/* zone filter pills */}
+          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setZoneFilter('ALL')}
+              className={`btn btn-sm ${zoneFilter === 'ALL' ? 'btn-primary' : 'btn-outline-gray'}`}
+            >All</button>
+            {destinations.map((d) => (
+              <button
+                key={d._id || d.id}
+                onClick={() => setZoneFilter(d._id || d.id)}
+                className={`btn btn-sm ${zoneFilter === (d._id || d.id) ? 'btn-primary' : 'btn-outline-gray'}`}
+              >{d.name.split(' ')[0]}</button>
+            ))}
+          </div>
+        </div>
+        <div className="table-wrapper" style={{ border: 'none', boxShadow: 'none' }}>
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Slot ID</th><th>Zone</th><th>Latitude</th><th>Longitude</th><th>Status</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                /* group slots by destination */
+                const groups = {};
+                slots.forEach((slot) => {
+                  const dest = destinations.find((d) => (d._id || d.id) === slot.destinationId);
+                  const key  = dest ? (dest._id || dest.id) : 'none';
+                  const name = dest ? dest.name : 'No Zone';
+                  if (!groups[key]) groups[key] = { name, slots: [] };
+                  groups[key].slots.push(slot);
+                });
+                return Object.entries(groups)
+                  .filter(([key]) => zoneFilter === 'ALL' || key === zoneFilter)
+                  .map(([key, group]) => {
+                    const isCollapsed = collapsed[key];
+                    return (
+                      <>
+                        {/* zone header row */}
+                        <tr key={`hdr-${key}`} style={{ background: 'var(--gray-50)', cursor: 'pointer' }}
+                          onClick={() => setCollapsed((p) => ({ ...p, [key]: !p[key] }))}
+                        >
+                          <td colSpan={7} style={{ padding: 'var(--space-2) var(--space-4)', fontWeight: 700, fontSize: 'var(--text-xs)', color: 'var(--gray-600)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                {isCollapsed ? <polyline points="9 18 15 12 9 6"/> : <polyline points="6 9 12 15 18 9"/>}
+                              </svg>
+                              {group.name} <span style={{ fontWeight: 400, color: 'var(--gray-400)' }}>({group.slots.length} slots)</span>
+                            </span>
+                          </td>
+                        </tr>
+                        {/* slot rows */}
+                        {!isCollapsed && group.slots.map((slot) => (
+                          <tr key={slot.slotId}>
+                            <td style={{ width: 32 }} />
+                            <td className="td-slot">{slot.slotId}</td>
+                            <td style={{ fontSize: 'var(--text-xs)' }}>{group.name}</td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{Number(slot.lat).toFixed(6)}</td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{Number(slot.lng).toFixed(6)}</td>
+                            <td><span className={`badge ${slot.status === 'AVAILABLE' ? 'badge-available' : slot.status === 'OCCUPIED' ? 'badge-occupied' : 'badge-oos'}`}>{slot.status}</span></td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                className={`btn btn-sm ${slot.status === 'OUT_OF_SERVICE' ? 'btn-success' : 'btn-warning'}`}
+                                onClick={() => handleToggleOos(slot)}
+                              >{slot.status === 'OUT_OF_SERVICE' ? 'Restore' : 'Mark OOS'}</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </>
+                    );
+                  });
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

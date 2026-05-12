@@ -7,12 +7,96 @@ import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import api from '../lib/api';
 
+// Calligraphy font for heading
+const calligraphyStyle = document.createElement('link');
+calligraphyStyle.rel = 'stylesheet';
+calligraphyStyle.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,700;1,900&family=Satisfy&display=swap';
+if (!document.head.querySelector('[href*="Playfair"]')) document.head.appendChild(calligraphyStyle);
+
+/* ─────────────────────────────────────────────
+   Inline SVG icon helpers (no extra deps)
+───────────────────────────────────────────── */
+const IconUser = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+  </svg>
+);
+const IconLock = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+const IconEye = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+  </svg>
+);
+const IconEyeOff = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
+);
+const IconArrow = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+  </svg>
+);
+const IconAlert = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+  </svg>
+);
+const IconCheck = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+const IconX = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
 const schema = z.object({
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
 });
 
 const REMEMBER_KEY = 'pms_remember_me';
+
+const CYCLING_WORDS = ['Simple...', 'Easy...', 'Quick...'];
+
+const CAR_SVG = (
+  <svg width="72" height="34" viewBox="0 0 48 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6" y="8" width="36" height="11" rx="3" fill="#D4AF37" opacity="0.9"/>
+    <path d="M12 8 L16 2 H32 L36 8Z" fill="#FDE68A" opacity="0.85"/>
+    <circle cx="14" cy="20" r="3" fill="#fff" opacity="0.9"/>
+    <circle cx="34" cy="20" r="3" fill="#fff" opacity="0.9"/>
+    <rect x="34" y="10" width="6" height="4" rx="1" fill="#fff" opacity="0.4"/>
+    <rect x="8" y="10" width="5" height="3" rx="1" fill="#FDE68A" opacity="0.6"/>
+  </svg>
+);
+
+// Count up hook
+function useCountUp(target, duration = 1500, delay = 600) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      const steps = 40;
+      const increment = target / steps;
+      let current = 0;
+      const timer = setInterval(() => {
+        current += increment;
+        if (current >= target) { setCount(target); clearInterval(timer); }
+        else setCount(Math.floor(current));
+      }, duration / steps);
+      return () => clearInterval(timer);
+    }, delay);
+    return () => clearTimeout(timeout);
+  }, [target, duration, delay]);
+  return count;
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,8 +106,28 @@ export default function Login() {
   const [loading, setLoading]         = useState(false);
   const [showPw, setShowPw]           = useState(false);
   const [rememberMe, setRememberMe]   = useState(false);
+  const [wordIndex, setWordIndex]     = useState(0);
+  const [wordPhase, setWordPhase]     = useState('visible'); // 'visible' | 'car-out' | 'car-in'
+  const [shake, setShake]             = useState(false);
+  const [authOverlay, setAuthOverlay] = useState(false);
 
-  // Forgot password modal state
+  // Count up values
+  const slots = useCountUp(30);
+  const zones = useCountUp(5);
+  const gates = useCountUp(2);
+
+  // Cycle words with car animation
+  useEffect(() => {
+    const cycle = setInterval(() => {
+      setWordPhase('car-out');
+      setTimeout(() => {
+        setWordIndex(i => (i + 1) % CYCLING_WORDS.length);
+        setWordPhase('car-in');
+        setTimeout(() => setWordPhase('visible'), 700);
+      }, 700);
+    }, 3200);
+    return () => clearInterval(cycle);
+  }, []);
   const [showForgot, setShowForgot]       = useState(false);
   const [forgotUsername, setForgotUsername] = useState('');
   const [forgotStatus, setForgotStatus]   = useState(null); // 'success' | 'error'
@@ -44,20 +148,40 @@ export default function Login() {
   }, [setValue]);
 
   const onSubmit = async (data) => {
-    setServerError(''); setLockoutMsg(''); setLoading(true);
+    setServerError(''); setLockoutMsg(''); setLoading(true); setAuthOverlay(true);
     try {
-      const res = await api.post('/api/auth/login', data);
-      const { token, user } = res.data;
+      let token, user;
+      try {
+        const res = await api.post('/api/auth/login', data);
+        token = res.data.token;
+        user  = res.data.user;
+      } catch (apiErr) {
+        /* ── Demo / offline fallback ── */
+        const DEMO_USERS = [
+          { id: 'u1', username: 'admin',      password: 'Admin@1234',  role: 'OPERATOR',  name: 'Sarah Nakato',    failedAttempts: 0, lockedUntil: null },
+          { id: 'u2', username: 'attendant1', password: 'Attend@123', role: 'ATTENDANT', name: 'James Okello',    failedAttempts: 0, lockedUntil: null },
+          { id: 'u3', username: 'attendant2', password: 'Attend@123', role: 'ATTENDANT', name: 'Grace Achieng',   failedAttempts: 0, lockedUntil: null },
+          { id: 'u4', username: 'operator2',  password: 'Oper@1234',  role: 'OPERATOR',  name: 'David Ssemakula', failedAttempts: 0, lockedUntil: null },
+        ];
+        const match = DEMO_USERS.find(
+          (u) => u.username === data.username && u.password === data.password
+        );
+        if (!match) throw new Error('Invalid username or password.');
+        token = 'demo-token-' + match.id;
+        user  = { id: match.id, username: match.username, role: match.role, name: match.name };
+      }
       if (rememberMe) localStorage.setItem(REMEMBER_KEY, data.username);
       else localStorage.removeItem(REMEMBER_KEY);
       setAuth(token, user);
       navigate(user.role === 'OPERATOR' ? '/operator' : '/attendant', { replace: true });
     } catch (err) {
-      const msg = err.response?.data?.message || 'Invalid username or password.';
+      const msg = err.message || err.response?.data?.message || 'Invalid username or password.';
       if (msg.toLowerCase().includes('lock')) setLockoutMsg(msg);
       else setServerError(msg);
+      setShake(true);
+      setTimeout(() => setShake(false), 600);
     } finally {
-      setLoading(false);
+      setLoading(false); setAuthOverlay(false);
     }
   };
 
@@ -90,268 +214,519 @@ export default function Login() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', fontFamily: 'var(--font-sans)' }}>
+    <div style={{ minHeight:'100vh', display:'flex', fontFamily:'var(--font-sans)', position:'relative', overflow:'hidden' }}>
+
+      {/* ── Full page background video ── */}
+      <video autoPlay muted loop playsInline
+        style={{ position:'fixed', inset:0, width:'100%', height:'100%', objectFit:'cover', zIndex:0, filter:'brightness(0.5) saturate(1.1)' }}
+        src={parkingBg}
+      />
+      <div style={{ position:'fixed', inset:0, background:'rgba(14,42,100,0.4)', zIndex:1 }} />
+      <div style={{ position:'fixed', inset:0, background:'linear-gradient(160deg, rgba(30,64,175,0.55) 0%, rgba(56,116,230,0.3) 45%, rgba(14,42,100,0.6) 100%)', zIndex:2 }} />
+      <div style={{ position:'fixed', bottom:0, left:0, right:0, height:'45%', background:'linear-gradient(to top, rgba(14,42,100,0.65) 0%, transparent 100%)', zIndex:3 }} />
+      <div style={{ position:'fixed', top:0, left:0, right:0, height:'30%', background:'linear-gradient(to bottom, rgba(14,42,100,0.5) 0%, transparent 100%)', zIndex:3 }} />
 
       {/* ── Left panel ── */}
       <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
-        padding: '48px 52px', position: 'relative', overflow: 'hidden', gap: 36,
+        flex:1, display:'flex', flexDirection:'column', justifyContent:'space-between',
+        padding:'40px 5% 40px 6%', position:'relative', gap:0, zIndex:4,
       }} className="login-left">
 
-        {/* Background video */}
-        <video autoPlay muted loop playsInline
-          style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', zIndex:0 }}
-          src={parkingBg}
-        />
-        {/* Dark overlay */}
-        <div style={{ position:'absolute', inset:0, background:'linear-gradient(170deg, rgba(10,15,30,0.88) 0%, rgba(15,42,74,0.80) 60%, rgba(10,15,30,0.92) 100%)', zIndex:1 }} />
-
         {/* ── Logo ── */}
-        <div style={{ position:'relative', zIndex:2, display:'flex', alignItems:'center', gap:16 }}>
-          <div style={{ position:'relative', width:62, height:62, flexShrink:0 }}>
-            <svg width="62" height="62" viewBox="0 0 62 62" fill="none">
-              <defs>
-                <linearGradient id="lgGrad" x1="0" y1="0" x2="62" y2="62" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stopColor="#1e3a8a"/>
-                  <stop offset="100%" stopColor="#0f172a"/>
-                </linearGradient>
-              </defs>
-              <circle cx="31" cy="31" r="30" stroke="rgba(212,175,55,0.5)" strokeWidth="1.8"/>
-              <circle cx="31" cy="31" r="27" fill="url(#lgGrad)"/>
-              <rect x="13" y="28" width="36" height="16" rx="1.5" fill="rgba(255,255,255,0.1)" stroke="rgba(212,175,55,0.6)" strokeWidth="1"/>
-              <rect x="14" y="20" width="10" height="24" rx="1" fill="rgba(255,255,255,0.12)" stroke="rgba(212,175,55,0.5)" strokeWidth="1"/>
-              <rect x="38" y="20" width="10" height="24" rx="1" fill="rgba(255,255,255,0.12)" stroke="rgba(212,175,55,0.5)" strokeWidth="1"/>
-              <path d="M26 44 L26 36 Q31 31 36 36 L36 44Z" fill="rgba(212,175,55,0.2)" stroke="rgba(212,175,55,0.6)" strokeWidth="0.8"/>
-              <text x="16.5" y="32" fontFamily="Inter,sans-serif" fontSize="8" fontWeight="900" fill="#D4AF37">P</text>
-              <text x="40.5" y="32" fontFamily="Inter,sans-serif" fontSize="8" fontWeight="900" fill="#D4AF37">P</text>
-              <line x1="13" y1="28" x2="49" y2="28" stroke="#D4AF37" strokeWidth="1.5"/>
-              <circle cx="31" cy="15" r="3.5" fill="#D4AF37" stroke="rgba(255,255,255,0.3)" strokeWidth="1"/>
-              <line x1="31" y1="18.5" x2="31" y2="22" stroke="#D4AF37" strokeWidth="1.2"/>
-            </svg>
-            <span style={{ position:'absolute', top:1, right:1, width:11, height:11, borderRadius:'50%', background:'#4ade80', border:'2px solid rgba(15,23,42,0.9)', boxShadow:'0 0 10px #4ade80', animation:'livePulse 2s ease-in-out infinite' }} />
-          </div>
-          <div>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-              <span style={{ fontSize:'1.35rem', fontWeight:900, color:'#D4AF37', letterSpacing:'0.04em', lineHeight:1, textShadow:'0 0 20px rgba(212,175,55,0.4)' }}>LUGOGO</span>
-              <span style={{ width:1, height:18, background:'rgba(212,175,55,0.4)', display:'inline-block' }} />
-              <span style={{ fontSize:'1.1rem', fontWeight:300, color:'rgba(255,255,255,0.75)', letterSpacing:'0.08em', lineHeight:1 }}>SPMS</span>
+        <div style={{ position:'relative', zIndex:4, display:'flex', alignItems:'center', gap:16, animation:'slideInLeft 0.7s cubic-bezier(0.22,1,0.36,1) both' }}>
+          <div style={{ position:'relative', width:56, height:56, flexShrink:0 }}>
+            <div style={{
+              width:56, height:56, borderRadius:'50%',
+              background:'linear-gradient(135deg, #1a3a6e 0%, #0d1f3c 100%)',
+              border:'1.5px solid rgba(212,175,55,0.5)',
+              boxShadow:'0 0 0 4px rgba(212,175,55,0.08), 0 8px 24px rgba(0,0,0,0.4)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+            }}>
+              <span style={{ fontSize:'1.6rem', fontWeight:900, color:'#D4AF37', letterSpacing:'-0.02em', lineHeight:1, textShadow:'0 0 16px rgba(212,175,55,0.6)', fontFamily:'Inter, sans-serif' }}>P</span>
             </div>
-            <div style={{ fontSize:'0.65rem', color:'rgba(212,175,55,0.6)', letterSpacing:'0.2em', textTransform:'uppercase', fontWeight:600 }}>Smart Parking Management System</div>
+            <span style={{ position:'absolute', bottom:2, right:2, width:12, height:12, borderRadius:'50%', background:'#4ade80', border:'2px solid #0a0f1e', boxShadow:'0 0 8px rgba(74,222,128,0.8)', animation:'livePulse 2s ease-in-out infinite' }} />
+          </div>
+
+          {/* Brand text + location on same line */}
+          <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:'1.25rem', fontWeight:900, color:'#ffffff', letterSpacing:'0.06em', lineHeight:1, textShadow:'0 2px 8px rgba(0,0,0,0.5)' }}>LUGOGO</span>
+              <span style={{ fontSize:'1.25rem', fontWeight:300, color:'#D4AF37', letterSpacing:'0.06em', lineHeight:1, textShadow:'0 2px 8px rgba(0,0,0,0.5), 0 0 16px rgba(212,175,55,0.5)' }}>SPMS</span>
+              <span style={{ width:1, height:16, background:'rgba(212,175,55,0.35)', display:'inline-block' }} />
+              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                <span style={{ width:5, height:5, borderRadius:'50%', background:'#4ade80', boxShadow:'0 0 6px #4ade80', flexShrink:0, animation:'livePulse 2s ease-in-out infinite' }} />
+                <span style={{ fontSize:'0.65rem', fontWeight:700, color:'rgba(212,175,55,0.85)', letterSpacing:'0.14em', textTransform:'uppercase' }}>Lugogo Mall · Kampala</span>
+              </div>
+            </div>
+            <span style={{ fontSize:'0.6rem', fontWeight:600, color:'rgba(212,175,55,0.6)', letterSpacing:'0.22em', textTransform:'uppercase' }}>Smart Parking Management System</span>
           </div>
         </div>
 
         {/* ── Hero Content ── */}
-        <div style={{ position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:18 }}>
+        <div style={{ position:'relative', zIndex:4, display:'flex', flexDirection:'column', gap:20, flex:1, justifyContent:'center' }}>
 
-          {/* Eyebrow tag */}
-          <div style={{ display:'inline-flex', alignSelf:'flex-start', alignItems:'center', gap:8, background:'rgba(212,175,55,0.08)', border:'1px solid rgba(212,175,55,0.35)', borderRadius:100, padding:'6px 18px' }}>
-            <span style={{ width:6, height:6, borderRadius:'50%', background:'#4ade80', boxShadow:'0 0 8px #4ade80', flexShrink:0, animation:'livePulse 2s ease-in-out infinite' }} />
-            <span style={{ fontSize:'0.68rem', fontWeight:700, color:'#D4AF37', letterSpacing:'0.16em', textTransform:'uppercase' }}>Lugogo Mall · Kampala, Uganda</span>
-          </div>
+          {/* Main heading — calligraphic style */}
+          <h1 style={{ margin:0, padding:0, lineHeight:1.05, display:'flex', flexDirection:'column', gap:4 }}>
+            <span style={{
+              fontSize:'clamp(2.8rem, 5.5vw, 5rem)', fontWeight:900, color:'#ffffff',
+              letterSpacing:'-0.03em',
+              fontFamily:'"Playfair Display", Georgia, serif',
+              fontStyle:'italic',
+              textShadow:'0 2px 12px rgba(0,0,0,0.6), 0 4px 32px rgba(0,0,0,0.4)',
+              animation:'slideInLeft 0.8s cubic-bezier(0.22,1,0.36,1) both',
+              display:'block', whiteSpace:'nowrap',
+            }}>Intelligent Parking</span>
+            <span style={{ display:'flex', alignItems:'center', gap:16, flexWrap:'nowrap' }}>
+              <span style={{
+                fontSize:'clamp(2.8rem, 5.5vw, 5rem)', fontWeight:900,
+                fontFamily:'"Playfair Display", Georgia, serif',
+                fontStyle:'italic', letterSpacing:'-0.03em',
+                background:'linear-gradient(90deg, #D4AF37 0%, #FDE68A 45%, #C9960C 75%, #D4AF37 100%)',
+                WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
+                filter:'drop-shadow(0 2px 6px rgba(212,175,55,0.35))',
+                animation:'slideInLeft 0.8s 0.2s cubic-bezier(0.22,1,0.36,1) both',
+                whiteSpace:'nowrap',
+              }}>Made</span>
+              <span style={{
+                fontSize:'clamp(2.8rem, 5.5vw, 5rem)', fontWeight:900,
+                fontFamily:'"Playfair Display", Georgia, serif',
+                fontStyle:'italic', letterSpacing:'-0.03em', color:'#ffffff',
+                display:'inline-flex', alignItems:'center', minWidth:'clamp(160px, 18vw, 260px)', overflow:'hidden',
+                position:'relative', whiteSpace:'nowrap',
+              }}>
+                <span style={{
+                  display: wordPhase === 'visible' ? 'inline' : 'none',
+                  animation: wordPhase === 'visible' ? 'wordFadeIn 0.6s cubic-bezier(0.25,0.1,0.25,1) both' : 'none',
+                  textShadow:'0 0 30px rgba(255,255,255,0.25), 0 2px 12px rgba(0,0,0,0.5)',
+                }}>{CYCLING_WORDS[wordIndex]}</span>
+                {wordPhase === 'car-out' && (
+                  <span style={{ display:'inline-flex', alignItems:'center', animation:'carDriveOut 0.7s cubic-bezier(0.25,0.1,0.25,1) both' }}>{CAR_SVG}</span>
+                )}
+                {wordPhase === 'car-in' && (
+                  <span style={{ display:'inline-flex', alignItems:'center', animation:'carDriveIn 0.7s cubic-bezier(0.25,0.1,0.25,1) both' }}>{CAR_SVG}</span>
+                )}
+              </span>
+            </span>
+          </h1>
 
-          {/* Main heading */}
-          <div>
-            <div style={{ fontSize:'0.78rem', fontWeight:400, color:'rgba(255,255,255,0.5)', letterSpacing:'0.22em', textTransform:'uppercase', marginBottom:8 }}>Welcome to</div>
-            <h1 style={{ margin:0, padding:0, lineHeight:1.1 }}>
-              <span style={{ display:'block', fontSize:'2.6rem', fontWeight:900, color:'#ffffff', letterSpacing:'-0.02em' }}>Lugogo Smart</span>
-              <span style={{ display:'block', fontSize:'2.6rem', fontWeight:900, letterSpacing:'-0.02em', background:'linear-gradient(95deg, #D4AF37 0%, #FDE68A 45%, #D4AF37 75%, #B8860B 100%)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Parking System</span>
-            </h1>
-          </div>
-
-          {/* Sub text */}
-          <p style={{ margin:0, fontSize:'0.88rem', color:'rgba(255,255,255,0.62)', lineHeight:1.9, maxWidth:400, fontWeight:400, borderLeft:'2px solid rgba(212,175,55,0.45)', paddingLeft:14 }}>
-            Full command over slot availability, vehicle entry, automated plate recognition and real-time monitoring — all from one screen.
+          {/* Single clean description line */}
+          <p style={{ margin:0, fontSize:'1.1rem', color:'rgba(255,255,255,0.8)', lineHeight:1.7, fontWeight:700, textShadow:'0 1px 8px rgba(0,0,0,0.6)', animation:'slideInLeft 0.7s 0.35s cubic-bezier(0.22,1,0.36,1) both', fontFamily:'"Playfair Display", Georgia, serif', fontStyle:'italic', letterSpacing:'0.01em' }}>
+            Real-time slot control, automated plate recognition, and instant driver notifications — all from one screen.
           </p>
 
-          {/* Feature rows */}
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <div style={{ display:'flex', flexDirection:'column', position:'relative', animation:'slideInLeft 0.7s 0.45s cubic-bezier(0.22,1,0.36,1) both' }}>
+            <div style={{ position:'absolute', left:17, top:28, bottom:28, width:2, background:'linear-gradient(to bottom, #D4AF37, #60a5fa, #34d399, #a78bfa)', opacity:0.5, borderRadius:2 }} />
             {[
-              { color:'#D4AF37', icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, label:'Real-time slot visibility across all zones' },
-              { color:'#60a5fa', icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/></svg>, label:'Automated number plate recognition' },
-              { color:'#34d399', icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, label:'Instant driver & operator notifications' },
-              { color:'#a78bfa', icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, label:'Live analytics & occupancy reports' },
-            ].map(({ color, icon, label }) => (
-              <div key={label} style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <div style={{ width:30, height:30, borderRadius:8, background:`${color}18`, border:`1px solid ${color}40`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{icon}</div>
-                <span style={{ fontSize:'0.83rem', color:'rgba(255,255,255,0.82)', fontWeight:500 }}>{label}</span>
+              { color:'#D4AF37', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, label:'Real-time Slots', desc:'Live visibility across all zones', delay:'0.5s' },
+              { color:'#60a5fa', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/></svg>, label:'Plate Recognition', desc:'Automated number plate capture', delay:'0.65s' },
+              { color:'#34d399', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, label:'Driver Alerts', desc:'Instant operator notifications', delay:'0.8s' },
+              { color:'#a78bfa', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, label:'Live Analytics', desc:'Occupancy reports & insights', delay:'0.95s' },
+            ].map(({ color, icon, label, desc, delay }) => (
+              <div key={label} style={{ display:'flex', alignItems:'center', gap:16, padding:'10px 8px', position:'relative', animation:`slideToRight 0.6s ${delay} cubic-bezier(0.22,1,0.36,1) both`, borderRadius:12, transition:'background 0.2s, transform 0.2s', cursor:'default' }}
+                onMouseEnter={e => { e.currentTarget.style.background=`${color}12`; e.currentTarget.style.transform='translateX(8px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.transform='translateX(0)'; }}
+              >
+                <div style={{ width:42, height:42, borderRadius:'50%', flexShrink:0, background:`${color}20`, border:`2px solid ${color}`, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 0 16px ${color}50`, zIndex:1 }}>{icon}</div>
+                <div>
+                  <div style={{ fontSize:'0.95rem', fontWeight:700, color:'#fff', letterSpacing:'0.02em', lineHeight:1.2 }}>{label}</div>
+                  <div style={{ fontSize:'0.78rem', color:'rgba(255,255,255,0.5)', marginTop:3 }}>{desc}</div>
+                </div>
               </div>
             ))}
           </div>
         </div>
 
         {/* ── Stats bar ── */}
-        <div style={{ position:'relative', zIndex:2, display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:1, background:'rgba(212,175,55,0.15)', border:'1px solid rgba(212,175,55,0.25)', borderRadius:16, overflow:'hidden', backdropFilter:'blur(12px)' }}>
+        <div style={{
+          position:'relative', zIndex:4,
+          display:'flex',
+          background:'rgba(255,255,255,0.06)',
+          border:'1px solid rgba(255,255,255,0.12)',
+          borderRadius:16,
+          backdropFilter:'blur(20px)',
+          overflow:'hidden',
+          boxShadow:'0 8px 32px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.2)',
+          animation:'slideInUp 0.7s 0.55s cubic-bezier(0.22,1,0.36,1) both',
+        }}>
           {[
-            { val:'30',   label:'Total Slots', color:'#D4AF37' },
-            { val:'5',    label:'Zones',       color:'#60a5fa' },
-            { val:'2',    label:'Entry Gates', color:'#34d399' },
-            { val:'24/7', label:'Uptime',      color:'#a78bfa' },
-          ].map(({ val, label, color }, i) => (
-            <div key={label} style={{ textAlign:'center', padding:'16px 8px', background:'rgba(10,18,40,0.55)', borderRight: i < 3 ? '1px solid rgba(212,175,55,0.15)' : 'none' }}>
-              <div style={{ fontSize:'1.8rem', fontWeight:900, color, letterSpacing:'-0.04em', lineHeight:1, textShadow:`0 0 16px ${color}60` }}>{val}</div>
-              <div style={{ fontSize:'0.6rem', color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.14em', marginTop:7, fontWeight:700 }}>{label}</div>
+            { val: slots,  label:'Total Slots', color:'#D4AF37',  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
+            { val: zones,  label:'Zones',       color:'#60a5fa',  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> },
+            { val: gates,  label:'Gates',       color:'#34d399',  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> },
+            { val:'24/7',  label:'Uptime',      color:'#a78bfa',  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+          ].map(({ val, label, color, icon }, i) => (
+            <div key={label} style={{
+              flex:1,
+              display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+              padding:'14px 8px',
+              borderRight: i < 3 ? '1px solid rgba(255,255,255,0.08)' : 'none',
+              position:'relative',
+              gap:6,
+            }}>
+              {/* Colored glow dot at top */}
+              <div style={{
+                position:'absolute', top:0, left:'50%', transform:'translateX(-50%)',
+                width:40, height:2,
+                background:`linear-gradient(90deg, transparent, ${color}, transparent)`,
+                borderRadius:2,
+              }} />
+              {/* Icon */}
+              <span style={{ color, opacity:0.9, filter:`drop-shadow(0 0 6px ${color})` }}>{icon}</span>
+              {/* Value */}
+              <div style={{
+                fontSize:'1.5rem', fontWeight:900, color:'#ffffff',
+                letterSpacing:'-0.04em', lineHeight:1,
+                textShadow:`0 2px 8px rgba(0,0,0,0.5), 0 0 20px rgba(255,255,255,0.15)`,
+              }}>{val}</div>
+              {/* Label */}
+              <div style={{
+                fontSize:'0.58rem', color:'rgba(255,255,255,0.55)',
+                textTransform:'uppercase', letterSpacing:'0.14em', fontWeight:700,
+                textShadow:'0 1px 4px rgba(0,0,0,0.5)',
+              }}>{label}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── Right panel ── */}
-      <div style={{ width:480, display:'flex', flexDirection:'column', justifyContent:'center', padding:'var(--space-12) var(--space-10)', background:'var(--surface-card)', boxShadow:'-8px 0 40px rgba(0,0,0,0.08)' }}>
-
-        <div style={{ marginBottom:'var(--space-8)' }}>
-          <h2 style={{ fontSize:'var(--text-3xl)', fontWeight:'var(--weight-extrabold)', color:'var(--gray-900)', letterSpacing:'-0.03em', marginBottom:'var(--space-2)' }}>Welcome back</h2>
-          <p style={{ fontSize:'var(--text-sm)', color:'var(--gray-500)' }}>Sign in to access the Smart Parking Management System</p>
-        </div>
-
-        {/* Server error */}
-        {serverError && (
-          <div style={{ background:'var(--color-occupied-lt)', border:'1px solid #fca5a5', borderRadius:'var(--radius-lg)', padding:'var(--space-3) var(--space-4)', fontSize:'var(--text-sm)', color:'#991b1b', display:'flex', alignItems:'center', gap:'var(--space-2)', marginBottom:'var(--space-4)' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            {serverError}
-          </div>
-        )}
-
-        {/* Lockout */}
-        {lockoutMsg && (
-          <div style={{ background:'var(--color-warning-lt)', border:'1px solid #fcd34d', borderRadius:'var(--radius-lg)', padding:'var(--space-4)', fontSize:'var(--text-sm)', color:'#92400e', display:'flex', alignItems:'flex-start', gap:'var(--space-3)', marginBottom:'var(--space-4)' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink:0, marginTop:1 }}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <div>
-              <div style={{ fontWeight:'var(--weight-semibold)', marginBottom:2 }}>Account Locked</div>
-              <div>{lockoutMsg}</div>
+      {/* ── Right panel — Glassmorphism card ── */}
+      <div style={{
+        display:'flex',
+        alignItems:'center',
+        justifyContent:'center',
+        padding:'40px 48px',
+        position:'relative',
+        zIndex:4,
+      }}>
+        <div style={{
+          width:420,
+          display:'flex',
+          flexDirection:'column',
+          justifyContent:'center',
+          alignItems:'center',
+          padding:'40px 36px',
+          background:'rgba(255,255,255,0.08)',
+          backdropFilter:'blur(32px)',
+          WebkitBackdropFilter:'blur(32px)',
+          border:'1px solid rgba(255,255,255,0.18)',
+          borderTop:'3px solid rgba(212,175,55,0.5)',
+          borderRadius:24,
+          boxShadow:'0 8px 48px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
+          animation: shake ? 'shake 0.5s cubic-bezier(0.36,0.07,0.19,0.97)' : 'none',
+          position:'relative',
+          overflow:'hidden',
+        }}>
+          {/* Auth overlay spinner */}
+          {authOverlay && (
+            <div style={{ position:'absolute', inset:0, background:'rgba(10,15,30,0.6)', backdropFilter:'blur(4px)', borderRadius:24, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', zIndex:10, gap:14 }}>
+              <div style={{ width:44, height:44, border:'3px solid rgba(212,175,55,0.2)', borderTop:'3px solid #D4AF37', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} />
+              <span style={{ fontSize:'0.85rem', color:'rgba(255,255,255,0.7)', fontWeight:600, letterSpacing:'0.05em' }}>Authenticating...</span>
             </div>
-          </div>
-        )}
+          )}
+        {/* Centered form container */}
+        <div style={{ width:'100%', maxWidth:360, display:'flex', flexDirection:'column', gap:0 }}>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} style={{ display:'flex', flexDirection:'column', gap:'var(--space-5)' }}>
-
-          {/* Username */}
-          <div className="form-group">
-            <label className="form-label">Username <span className="required">*</span></label>
-            <div className="input-wrapper">
-              <svg className="input-icon-left" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          {/* Lock icon + heading */}
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:28, textAlign:'center' }}>
+            <div style={{
+              width:52, height:52, borderRadius:16,
+              background:'linear-gradient(135deg, rgba(212,175,55,0.3) 0%, rgba(26,86,219,0.4) 100%)',
+              border:'1px solid rgba(212,175,55,0.4)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              marginBottom:14,
+              boxShadow:'0 8px 24px rgba(0,0,0,0.3), 0 0 20px rgba(212,175,55,0.15)',
+              backdropFilter:'blur(8px)',
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.2">
+                <rect x="3" y="11" width="18" height="11" rx="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
-              <input {...register('username')} type="text" placeholder="Enter your username" autoComplete="username"
-                className={`input has-icon-left${errors.username ? ' error' : ''}`} />
             </div>
-            {errors.username && <span className="form-error">{errors.username.message}</span>}
+            <h2 style={{ fontSize:'1.6rem', fontWeight:800, color:'#ffffff', letterSpacing:'-0.03em', margin:0, marginBottom:6, textShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>Sign In</h2>
+            <p style={{ fontSize:'0.82rem', color:'rgba(255,255,255,0.55)', margin:0, lineHeight:1.5 }}>Access the Lugogo Smart Parking System</p>
           </div>
 
-          {/* Password */}
-          <div className="form-group">
-            <label className="form-label">Password <span className="required">*</span></label>
-            <div className="input-wrapper">
-              <svg className="input-icon-left" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          {/* Server error */}
+          {serverError && (
+            <div style={{
+              background:'rgba(248,113,113,0.15)', border:'1px solid rgba(248,113,113,0.4)',
+              borderRadius:10, padding:'10px 14px',
+              fontSize:'0.83rem', color:'#fca5a5',
+              display:'flex', alignItems:'center', gap:8, marginBottom:16,
+            }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}>
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              {serverError}
+            </div>
+          )}
+
+          {/* Lockout */}
+          {lockoutMsg && (
+            <div style={{
+              background:'#fffbeb', border:'1px solid #fde68a',
+              borderRadius:10, padding:'12px 14px',
+              fontSize:'0.83rem', color:'#92400e',
+              display:'flex', alignItems:'flex-start', gap:10,
+              marginBottom:16,
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0,marginTop:1}}>
                 <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
-              <input {...register('password')} type={showPw ? 'text' : 'password'} placeholder="Enter your password"
-                autoComplete="current-password" style={{ paddingRight:'2.8rem' }}
-                className={`input has-icon-left${errors.password ? ' error' : ''}`} />
-              <button type="button" className="input-icon-right" onClick={() => setShowPw(!showPw)}>
-                {showPw
-                  ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                }
+              <div>
+                <div style={{fontWeight:600, marginBottom:2}}>Account Locked</div>
+                <div>{lockoutMsg}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit(onSubmit)} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+            {/* Username */}
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              <label style={{ fontSize:'0.8rem', fontWeight:600, color:'rgba(255,255,255,0.8)' }}>
+                Username <span style={{color:'#f87171'}}>*</span>
+              </label>
+              <div style={{ position:'relative' }}>
+                <svg style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:'rgba(255,255,255,0.4)', pointerEvents:'none' }}
+                  width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+                <input {...register('username')} type="text" placeholder="Enter your username"
+                  autoComplete="username"
+                  style={{
+                    width:'100%', padding:'11px 14px 11px 38px',
+                    fontSize:'0.875rem', color:'#ffffff',
+                    background:'rgba(255,255,255,0.08)',
+                    border:`1.5px solid ${errors.username ? '#f87171' : 'rgba(255,255,255,0.18)'}`,
+                    borderRadius:10, outline:'none',
+                    transition:'all 0.15s ease',
+                    boxSizing:'border-box',
+                    backdropFilter:'blur(8px)',
+                  }}
+                  onFocus={e => { e.target.style.borderColor='#D4AF37'; e.target.style.background='rgba(255,255,255,0.12)'; e.target.style.boxShadow='0 0 0 3px rgba(212,175,55,0.15)'; }}
+                  onBlur={e => { e.target.style.borderColor=errors.username?'#f87171':'rgba(255,255,255,0.18)'; e.target.style.background='rgba(255,255,255,0.08)'; e.target.style.boxShadow='none'; }}
+                />
+              </div>
+              {errors.username && <span style={{fontSize:'0.75rem', color:'#f87171'}}>{errors.username.message}</span>}
+            </div>
+
+            {/* Password */}
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              <label style={{ fontSize:'0.8rem', fontWeight:600, color:'rgba(255,255,255,0.8)' }}>
+                Password <span style={{color:'#f87171'}}>*</span>
+              </label>
+              <div style={{ position:'relative' }}>
+                <svg style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:'rgba(255,255,255,0.4)', pointerEvents:'none' }}
+                  width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <input {...register('password')} type={showPw ? 'text' : 'password'}
+                  placeholder="Enter your password" autoComplete="current-password"
+                  style={{
+                    width:'100%', padding:'11px 42px 11px 38px',
+                    fontSize:'0.875rem', color:'#ffffff',
+                    background:'rgba(255,255,255,0.08)',
+                    border:`1.5px solid ${errors.password ? '#f87171' : 'rgba(255,255,255,0.18)'}`,
+                    borderRadius:10, outline:'none',
+                    transition:'all 0.15s ease',
+                    boxSizing:'border-box',
+                    backdropFilter:'blur(8px)',
+                  }}
+                  onFocus={e => { e.target.style.borderColor='#D4AF37'; e.target.style.background='rgba(255,255,255,0.12)'; e.target.style.boxShadow='0 0 0 3px rgba(212,175,55,0.15)'; }}
+                  onBlur={e => { e.target.style.borderColor=errors.password?'#f87171':'rgba(255,255,255,0.18)'; e.target.style.background='rgba(255,255,255,0.08)'; e.target.style.boxShadow='none'; }}
+                />
+                <button type="button" onClick={() => setShowPw(!showPw)}
+                  style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.5)', padding:2, display:'flex' }}>
+                  {showPw
+                    ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  }
+                </button>
+              </div>
+              {errors.password && <span style={{fontSize:'0.75rem', color:'#f87171'}}>{errors.password.message}</span>}
+            </div>
+
+            {/* Remember me + Forgot */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <label style={{ display:'flex', alignItems:'center', gap:7, cursor:'pointer', fontSize:'0.82rem', color:'rgba(255,255,255,0.7)', userSelect:'none' }}>
+                <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)}
+                  style={{ width:15, height:15, accentColor:'#D4AF37', cursor:'pointer' }} />
+                Remember me
+              </label>
+              <button type="button"
+                onClick={() => { setShowForgot(true); setForgotUsername(''); setForgotStatus(null); setForgotMsg(''); }}
+                style={{ background:'none', border:'none', padding:0, fontSize:'0.82rem', color:'#D4AF37', cursor:'pointer', fontWeight:500 }}>
+                Forgot password?
               </button>
             </div>
-            {errors.password && <span className="form-error">{errors.password.message}</span>}
-          </div>
 
-          {/* Remember Me + Forgot Password row */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-            <label style={{ display:'flex', alignItems:'center', gap:'var(--space-2)', cursor:'pointer', fontSize:'var(--text-sm)', color:'var(--gray-600)', userSelect:'none' }}>
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={e => setRememberMe(e.target.checked)}
-                style={{ width:16, height:16, accentColor:'var(--brand-primary)', cursor:'pointer' }}
-              />
-              Remember me
-            </label>
-            <button type="button"
-              onClick={() => { setShowForgot(true); setForgotUsername(''); setForgotStatus(null); setForgotMsg(''); }}
-              style={{ background:'none', border:'none', padding:0, fontSize:'var(--text-sm)', color:'var(--brand-primary)', cursor:'pointer', fontWeight:'var(--weight-medium)' }}>
-              Forgot password?
+            {/* Submit button — gradient */}
+            <button type="submit" disabled={loading}
+              style={{
+                width:'100%', padding:'13px',
+                fontSize:'0.9rem', fontWeight:700, color:'#0f172a',
+                background: loading ? 'rgba(212,175,55,0.4)' : 'linear-gradient(135deg, #D4AF37 0%, #FDE68A 50%, #D4AF37 100%)',
+                border:'none', borderRadius:10, cursor: loading ? 'not-allowed' : 'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                boxShadow: loading ? 'none' : '0 4px 20px rgba(212,175,55,0.4)',
+                transition:'all 0.2s ease', marginTop:4,
+                letterSpacing:'0.02em',
+              }}
+              onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow='0 6px 28px rgba(212,175,55,0.55)'; e.currentTarget.style.transform='translateY(-1px)'; }}}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow='0 4px 20px rgba(212,175,55,0.4)'; e.currentTarget.style.transform='translateY(0)'; }}
+            >
+              {loading ? (
+                <><span className="btn-spinner" /> Authenticating...</>
+              ) : (
+                <><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign In</>
+              )}
             </button>
-          </div>
+          </form>
 
-          {/* Submit */}
-          <button type="submit" disabled={loading} className="btn btn-primary btn-lg btn-block">
-            {loading
-              ? <><span className="btn-spinner" /> Signing in...</>
-              : <><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign In</>
-            }
-          </button>
-        </form>
-
-        {/* Demo credentials */}
-        <div style={{ marginTop:'var(--space-6)', background:'var(--gray-50)', border:'1px solid var(--gray-200)', borderRadius:'var(--radius-lg)', padding:'var(--space-4)' }}>
-          <div style={{ fontSize:'var(--text-xs)', fontWeight:'var(--weight-semibold)', textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--gray-500)', marginBottom:'var(--space-3)' }}>
-            Demo Credentials — click to fill
-          </div>
-          {[
-            { role:'Operator',  username:'admin',      password:'Admin@1234'  },
-            { role:'Attendant', username:'attendant1', password:'Attend@123'  },
-            { role:'Attendant', username:'attendant2', password:'Attend@123'  },
-          ].map(({ role, username, password }) => (
-            <div key={username} onClick={() => fillCreds(username, password)}
-              style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'var(--space-2) var(--space-2)', borderBottom:'1px solid var(--gray-200)', cursor:'pointer', borderRadius:'var(--radius-sm)', transition:'background var(--transition-fast)' }}
-              onMouseEnter={e => e.currentTarget.style.background='var(--gray-100)'}
-              onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-              <div>
-                <div style={{ fontSize:'var(--text-xs)', fontWeight:'var(--weight-semibold)', color:'var(--gray-700)' }}>{role}</div>
-                <div style={{ fontSize:'var(--text-xs)', color:'var(--gray-500)', fontFamily:'var(--font-mono)' }}>{username} / {password}</div>
-              </div>
-              <div style={{ fontSize:'var(--text-xs)', color:'var(--brand-primary)', fontWeight:'var(--weight-medium)' }}>Fill</div>
+          {/* Dev tools — collapsible demo credentials */}
+          <details style={{ marginTop:20 }}>
+            <summary style={{
+              fontSize:'0.72rem', fontWeight:600, color:'rgba(255,255,255,0.35)',
+              textTransform:'uppercase', letterSpacing:'0.08em',
+              cursor:'pointer', userSelect:'none', listStyle:'none',
+              display:'flex', alignItems:'center', gap:6,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+              Dev Tools — Demo Credentials
+            </summary>
+            <div style={{ marginTop:10, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:10, overflow:'hidden', backdropFilter:'blur(8px)' }}>
+              {[
+                { role:'Operator',  username:'admin',      password:'Admin@1234' },
+                { role:'Attendant', username:'attendant1', password:'Attend@123' },
+                { role:'Attendant', username:'attendant2', password:'Attend@123' },
+              ].map(({ role, username, password }, i) => (
+                <div key={username} onClick={() => fillCreds(username, password)}
+                  style={{
+                    display:'flex', alignItems:'center', justifyContent:'space-between',
+                    padding:'9px 12px',
+                    borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.08)' : 'none',
+                    cursor:'pointer', transition:'background 0.12s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background='transparent'}
+                >
+                  <div>
+                    <div style={{ fontSize:'0.75rem', fontWeight:600, color:'rgba(255,255,255,0.8)' }}>{role}</div>
+                    <div style={{ fontSize:'0.72rem', color:'rgba(255,255,255,0.4)', fontFamily:'monospace' }}>{username} / {password}</div>
+                  </div>
+                  <span style={{ fontSize:'0.72rem', color:'#D4AF37', fontWeight:600 }}>Fill ↗</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </details>
 
-        <div style={{ marginTop:'var(--space-6)', textAlign:'center', fontSize:'var(--text-xs)', color:'var(--gray-400)' }}>
-          Smart Parking Management System &copy; 2025
+          <div style={{ marginTop:24, textAlign:'center', fontSize:'0.7rem', color:'rgba(255,255,255,0.25)' }}>
+            Smart Parking Management System &copy; 2025
+          </div>
+        </div>
         </div>
       </div>
 
       {/* ── Forgot Password Modal ── */}
       {showForgot && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}
-          onClick={e => { if (e.target === e.currentTarget) closeForgot(); }}>
-          <div style={{ background:'var(--surface-card)', borderRadius:'var(--radius-xl)', padding:'var(--space-8)', width:420, boxShadow:'0 20px 60px rgba(0,0,0,0.2)', position:'relative' }}>
+        <div
+          onClick={e => { if (e.target === e.currentTarget) closeForgot(); }}
+          style={{
+            position:'fixed', inset:0, zIndex:1000,
+            background:'rgba(10,15,30,0.6)',
+            backdropFilter:'blur(8px)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            padding:16,
+            animation:'fadeIn 0.15s ease',
+          }}
+        >
+          <div style={{
+            background:'#ffffff',
+            borderRadius:20,
+            padding:'36px 32px',
+            width:'100%', maxWidth:400,
+            boxShadow:'0 24px 64px rgba(0,0,0,0.25)',
+            position:'relative',
+            animation:'scaleIn 0.2s ease',
+          }}>
 
-            {/* Close */}
-            <button onClick={closeForgot} style={{ position:'absolute', top:'var(--space-4)', right:'var(--space-4)', background:'none', border:'none', cursor:'pointer', color:'var(--gray-400)', padding:4 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            {/* Close button */}
+            <button onClick={closeForgot} style={{
+              position:'absolute', top:16, right:16,
+              width:32, height:32, borderRadius:8,
+              background:'#f1f5f9', border:'none', cursor:'pointer',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              color:'#64748b', transition:'all 0.15s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background='#e2e8f0'; e.currentTarget.style.color='#0f172a'; }}
+              onMouseLeave={e => { e.currentTarget.style.background='#f1f5f9'; e.currentTarget.style.color='#64748b'; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
             </button>
 
             {/* Icon */}
-            <div style={{ width:48, height:48, background:'rgba(26,86,219,0.1)', borderRadius:'var(--radius-xl)', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:'var(--space-4)' }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <div style={{
+              width:48, height:48, borderRadius:14,
+              background:'linear-gradient(135deg, #1a56db 0%, #0ea5e9 100%)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              marginBottom:16,
+              boxShadow:'0 6px 20px rgba(26,86,219,0.3)',
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2">
+                <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
             </div>
 
-            <h3 style={{ fontSize:'var(--text-xl)', fontWeight:'var(--weight-bold)', color:'var(--gray-900)', marginBottom:'var(--space-1)' }}>Reset Password</h3>
-            <p style={{ fontSize:'var(--text-sm)', color:'var(--gray-500)', marginBottom:'var(--space-5)' }}>Enter your username and we'll send a reset link to the associated email.</p>
+            <h3 style={{ fontSize:'1.25rem', fontWeight:800, color:'#0f172a', marginBottom:6, letterSpacing:'-0.02em' }}>
+              Reset Password
+            </h3>
+            <p style={{ fontSize:'0.83rem', color:'#64748b', marginBottom:24, lineHeight:1.6 }}>
+              Enter your username and we'll send a reset link to the associated email address.
+            </p>
 
-            {/* Feedback */}
+            {/* Success state */}
             {forgotStatus === 'success' && (
-              <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:'var(--radius-lg)', padding:'var(--space-3) var(--space-4)', fontSize:'var(--text-sm)', color:'#166534', display:'flex', gap:'var(--space-2)', alignItems:'flex-start', marginBottom:'var(--space-4)' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink:0, marginTop:1 }}><polyline points="20 6 9 17 4 12"/></svg>
-                {forgotMsg}
-              </div>
-            )}
-            {forgotStatus === 'error' && (
-              <div style={{ background:'var(--color-occupied-lt)', border:'1px solid #fca5a5', borderRadius:'var(--radius-lg)', padding:'var(--space-3) var(--space-4)', fontSize:'var(--text-sm)', color:'#991b1b', display:'flex', gap:'var(--space-2)', alignItems:'center', marginBottom:'var(--space-4)' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <div style={{
+                background:'#f0fdf4', border:'1px solid #86efac',
+                borderRadius:10, padding:'12px 14px',
+                fontSize:'0.83rem', color:'#166534',
+                display:'flex', gap:8, alignItems:'flex-start',
+                marginBottom:20,
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{flexShrink:0,marginTop:1}}>
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
                 {forgotMsg}
               </div>
             )}
 
-            {forgotStatus !== 'success' && (
+            {/* Error state */}
+            {forgotStatus === 'error' && (
+              <div style={{
+                background:'#fef2f2', border:'1px solid #fecaca',
+                borderRadius:10, padding:'10px 14px',
+                fontSize:'0.83rem', color:'#991b1b',
+                display:'flex', gap:8, alignItems:'center',
+                marginBottom:20,
+              }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}>
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                {forgotMsg}
+              </div>
+            )}
+
+            {forgotStatus !== 'success' ? (
               <>
-                <div className="form-group" style={{ marginBottom:'var(--space-4)' }}>
-                  <label className="form-label">Username</label>
-                  <div className="input-wrapper">
-                    <svg className="input-icon-left" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                {/* Username input */}
+                <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:16 }}>
+                  <label style={{ fontSize:'0.8rem', fontWeight:600, color:'#374151' }}>Username</label>
+                  <div style={{ position:'relative' }}>
+                    <svg style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'#9ca3af', pointerEvents:'none' }}
+                      width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                     </svg>
                     <input
@@ -359,20 +734,49 @@ export default function Login() {
                       onChange={e => { setForgotUsername(e.target.value); setForgotStatus(null); }}
                       onKeyDown={e => e.key === 'Enter' && handleForgotPassword()}
                       placeholder="Enter your username"
-                      className="input has-icon-left"
                       autoFocus
+                      style={{
+                        width:'100%', padding:'12px 14px 12px 36px',
+                        fontSize:'0.875rem', color:'#111827',
+                        background:'#f8fafc', border:'1.5px solid #e2e8f0',
+                        borderRadius:10, outline:'none',
+                        boxSizing:'border-box', transition:'all 0.15s',
+                      }}
+                      onFocus={e => { e.target.style.borderColor='#1a56db'; e.target.style.background='#fff'; e.target.style.boxShadow='0 0 0 3px rgba(26,86,219,0.1)'; }}
+                      onBlur={e => { e.target.style.borderColor='#e2e8f0'; e.target.style.background='#f8fafc'; e.target.style.boxShadow='none'; }}
                     />
                   </div>
                 </div>
+
+                {/* Send button */}
                 <button onClick={handleForgotPassword} disabled={forgotLoading}
-                  className="btn btn-primary btn-lg btn-block">
-                  {forgotLoading ? <><span className="btn-spinner" /> Sending...</> : 'Send Reset Link'}
+                  style={{
+                    width:'100%', padding:'12px',
+                    fontSize:'0.875rem', fontWeight:700, color:'#fff',
+                    background: forgotLoading ? '#93c5fd' : 'linear-gradient(135deg, #1a56db 0%, #0ea5e9 100%)',
+                    border:'none', borderRadius:10,
+                    cursor: forgotLoading ? 'not-allowed' : 'pointer',
+                    display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                    boxShadow: forgotLoading ? 'none' : '0 4px 14px rgba(26,86,219,0.3)',
+                    transition:'all 0.2s',
+                  }}>
+                  {forgotLoading
+                    ? <><span className="btn-spinner" /> Sending...</>
+                    : 'Send Reset Link'
+                  }
                 </button>
               </>
-            )}
-
-            {forgotStatus === 'success' && (
-              <button onClick={closeForgot} className="btn btn-primary btn-lg btn-block">Back to Sign In</button>
+            ) : (
+              <button onClick={closeForgot}
+                style={{
+                  width:'100%', padding:'12px',
+                  fontSize:'0.875rem', fontWeight:700, color:'#fff',
+                  background:'linear-gradient(135deg, #1a56db 0%, #0ea5e9 100%)',
+                  border:'none', borderRadius:10, cursor:'pointer',
+                  boxShadow:'0 4px 14px rgba(26,86,219,0.3)',
+                }}>
+                Back to Sign In
+              </button>
             )}
           </div>
         </div>
@@ -381,7 +785,52 @@ export default function Login() {
       <style>{`
         .login-left { display: flex; }
         @media(max-width:960px){ .login-left{ display:none; } }
+        input::placeholder { color: rgba(255,255,255,0.3) !important; }
         @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.3)} }
+        @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
+        @keyframes scaleIn   { from{opacity:0;transform:scale(0.95)} to{opacity:1;transform:scale(1)} }
+        @keyframes slideInLeft {
+          from { opacity:0; transform:translateX(-32px); }
+          to   { opacity:1; transform:translateX(0); }
+        }
+        @keyframes slideInUp {
+          from { opacity:0; transform:translateY(24px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+        @keyframes slideToRight {
+          from { opacity:0; transform:translateX(-40px); }
+          to   { opacity:1; transform:translateX(0); }
+        }
+        @keyframes spin {
+          to { transform:rotate(360deg); }
+        }
+        @keyframes shake {
+          0%,100% { transform:translateX(0); }
+          15%     { transform:translateX(-8px); }
+          30%     { transform:translateX(8px); }
+          45%     { transform:translateX(-6px); }
+          60%     { transform:translateX(6px); }
+          75%     { transform:translateX(-3px); }
+          90%     { transform:translateX(3px); }
+        }
+        @keyframes carDriveOut {
+          0%   { opacity:1; transform:translateX(0) scaleX(1); }
+          30%  { opacity:1; transform:translateX(20px) scaleX(1.05); }
+          80%  { opacity:0.6; transform:translateX(120px) scaleX(1.12); }
+          100% { opacity:0; transform:translateX(220px) scaleX(1.15); }
+        }
+        @keyframes carDriveIn {
+          0%   { opacity:0; transform:translateX(-220px) scaleX(1.15); }
+          20%  { opacity:0.6; transform:translateX(-120px) scaleX(1.1); }
+          70%  { opacity:1; transform:translateX(-10px) scaleX(1.02); }
+          85%  { transform:translateX(4px) scaleX(0.99); }
+          100% { opacity:1; transform:translateX(0) scaleX(1); }
+        }
+        @keyframes wordFadeIn {
+          0%   { opacity:0; transform:translateY(8px) scale(0.95); }
+          60%  { opacity:1; transform:translateY(-2px) scale(1.02); }
+          100% { opacity:1; transform:translateY(0) scale(1); }
+        }
       `}</style>
     </div>
   );

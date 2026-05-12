@@ -1,2 +1,232 @@
-function OperatorHistory() { return <div className="p-8 text-xl font-bold">Operator History — coming in Phase 6</div>; }
-export default OperatorHistory;
+import { useState, useEffect, useCallback } from 'react';
+import api from '../../lib/api';
+import { getOpSocket } from './OperatorLayout';
+import { isDemoMode, demoSearchSessions } from '../../lib/demo';
+
+function elapsed(entryTime) {
+  const ms = Date.now() - new Date(entryTime).getTime();
+  return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
+}
+function duration(entry, exit) {
+  const ms = new Date(exit) - new Date(entry);
+  return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
+}
+function formatDateTime(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('en-UG', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+export default function OperatorHistory() {
+  const [sessions,       setSessions]       = useState([]);
+  const [search,         setSearch]         = useState('');
+  const [loading,        setLoading]        = useState(true);
+  const [statusTab,      setStatusTab]      = useState('ALL');
+  const [todayOnly,      setTodayOnly]      = useState(false);
+  const [attendantFilter,setAttendantFilter]= useState('ALL');
+  const [expanded,       setExpanded]       = useState({});
+
+  const fetchSessions = useCallback(async (term = '') => {
+    try {
+      if (isDemoMode()) { setSessions(demoSearchSessions(term)); return; }
+      const params = term ? `?search=${encodeURIComponent(term)}` : '';
+      const { data } = await api.get(`/api/sessions${params}`);
+      setSessions(Array.isArray(data) ? data : data.sessions || []);
+    } catch {
+      setSessions(demoSearchSessions(term));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchSessions(); }, [fetchSessions]);
+
+  useEffect(() => {
+    const id = setTimeout(() => fetchSessions(search), 300);
+    return () => clearTimeout(id);
+  }, [search, fetchSessions]);
+
+  useEffect(() => {
+    const s = getOpSocket();
+    const onCreated = ({ session }) => setSessions((prev) => [session, ...prev]);
+    const onClosed  = (payload) => {
+      const id = payload.sessionId || payload._id;
+      setSessions((prev) => prev.map((s) => (s._id === id || s.id === id) ? { ...s, status: 'CLOSED', exitTime: new Date().toISOString() } : s));
+    };
+    s.on('session_created', onCreated);
+    s.on('session_closed',  onClosed);
+    return () => { s.off('session_created', onCreated); s.off('session_closed', onClosed); };
+  }, []);
+
+  /* derive filtered list + attendant options */
+  const attendants = ['ALL', ...new Set(sessions.map((s) => s.attendantName).filter(Boolean))];
+  const isToday = (d) => { const n = new Date(); const t = new Date(d); return t.getFullYear()===n.getFullYear()&&t.getMonth()===n.getMonth()&&t.getDate()===n.getDate(); };
+  const displayed = sessions.filter((s) => {
+    if (statusTab !== 'ALL' && s.status !== statusTab) return false;
+    if (todayOnly && !isToday(s.entryTime)) return false;
+    if (attendantFilter !== 'ALL' && s.attendantName !== attendantFilter) return false;
+    return true;
+  });
+
+  /* summary strip stats */
+  const midnight = new Date(); midnight.setHours(0,0,0,0);
+  const todaySess   = sessions.filter((s) => new Date(s.entryTime) >= midnight);
+  const activeNow   = sessions.filter((s) => s.status === 'ACTIVE').length;
+  const closedToday = todaySess.filter((s) => s.status === 'CLOSED' && s.exitTime);
+  const avgMs  = closedToday.length ? closedToday.reduce((sum,s) => sum+(new Date(s.exitTime)-new Date(s.entryTime)),0)/closedToday.length : 0;
+  const avgMin = Math.round(avgMs/60000);
+
+  /* CSV export */
+  const exportCSV = () => {
+    const headers = ['Plate','Phone','Destination','Slot','Attendant','Entry','Exit','Duration','Status'];
+    const rows = displayed.map((s) => {
+      const isActive = s.status === 'ACTIVE';
+      const dur = isActive ? elapsed(s.entryTime) : duration(s.entryTime, s.exitTime);
+      return [s.plateNumber, s.driverPhone, s.destinationName, s.slotId, s.attendantName||'', formatDateTime(s.entryTime), isActive?'':formatDateTime(s.exitTime), dur, s.status].join(',');
+    });
+    const csv  = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a'); a.href = url; a.download = `sessions-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="page-content">
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div className="page-title">Session History</div>
+          <div className="page-subtitle">All vehicle sessions across all attendants</div>
+        </div>
+        <div className="live-indicator">LIVE</div>
+      </div>
+
+      {/* summary strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', background: 'var(--surface-card)', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-card)', marginBottom: 'var(--space-4)', overflow: 'hidden' }}>
+        {[
+          { label: 'Total Sessions', value: sessions.length, color: 'var(--brand-primary)' },
+          { label: 'Active Now',     value: activeNow,       color: 'var(--color-occupied)' },
+          { label: "Today's Entries",value: todaySess.length,color: 'var(--color-available)' },
+          { label: 'Avg Duration',   value: avgMin > 0 ? `${avgMin}m` : '—', color: 'var(--color-warning)' },
+        ].map(({ label, value, color }, i) => (
+          <div key={label} style={{ padding: 'var(--space-4) var(--space-5)', borderRight: i < 3 ? '1px solid var(--gray-100)' : 'none' }}>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-500)', marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
+        <div className="search-input-wrapper" style={{ maxWidth: 260, width: '100%' }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input className="search-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search plate or phone..." />
+        </div>
+        {/* status tabs */}
+        <div style={{ display: 'flex', background: 'var(--gray-100)', borderRadius: 'var(--radius-md)', padding: 3, gap: 2 }}>
+          {[['ALL','All'],['ACTIVE','Active'],['CLOSED','Closed']].map(([val,label]) => (
+            <button key={val} onClick={() => setStatusTab(val)}
+              style={{ padding: '5px 12px', fontSize: 'var(--text-xs)', fontWeight: 600, borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer', background: statusTab===val ? 'var(--surface-card)' : 'transparent', color: statusTab===val ? 'var(--gray-800)' : 'var(--gray-500)', boxShadow: statusTab===val ? 'var(--shadow-xs)' : 'none', transition: 'all var(--transition-fast)' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* today toggle */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--gray-600)' }}>
+          <div onClick={() => setTodayOnly((t) => !t)} style={{ width: 36, height: 20, borderRadius: 'var(--radius-full)', position: 'relative', cursor: 'pointer', background: todayOnly ? 'var(--brand-primary)' : 'var(--gray-300)', transition: 'background var(--transition-fast)' }}>
+            <div style={{ position: 'absolute', top: 2, left: todayOnly ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', boxShadow: 'var(--shadow-xs)', transition: 'left var(--transition-fast)' }} />
+          </div>
+          Today only
+        </label>
+        {/* attendant filter */}
+        <select className="select" style={{ width: 'auto', minWidth: 140 }} value={attendantFilter} onChange={(e) => setAttendantFilter(e.target.value)}>
+          {attendants.map((a) => <option key={a} value={a}>{a === 'ALL' ? 'All Attendants' : a}</option>)}
+        </select>
+        <div style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--gray-500)' }}>
+          {displayed.length} record{displayed.length !== 1 ? 's' : ''}
+        </div>
+        <button className="btn btn-outline-gray btn-sm" onClick={exportCSV}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="skeleton-card">
+          {Array(8).fill(null).map((_, i) => (
+            <div key={i} className="skeleton-table-row">
+              {Array(9).fill(null).map((__, j) => <div key={j} className="skeleton" style={{ flex: 1, height: 14 }} />)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 32 }}></th>
+                <th>Plate</th><th>Phone</th><th>Destination</th><th>Slot</th>
+                <th>Attendant</th><th>Entry</th><th>Exit</th><th>Duration</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayed.length === 0 ? (
+                <tr><td colSpan={10}>
+                  <div className="empty-state" style={{ padding: 'var(--space-10)' }}>
+                    <svg className="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <div className="empty-state-title">No sessions found</div>
+                    <div className="empty-state-text">Try a different search term.</div>
+                  </div>
+                </td></tr>
+              ) : displayed.map((s) => {
+                const isActive = s.status === 'ACTIVE';
+                const dur   = isActive ? elapsed(s.entryTime) : duration(s.entryTime, s.exitTime);
+                const rowId = s._id || s.id;
+                const isExp = expanded[rowId];
+                return (
+                  <>
+                    <tr key={rowId} style={{ borderLeft: `3px solid ${isActive ? 'var(--color-available)' : 'transparent'}` }}>
+                      <td style={{ width: 32, paddingRight: 0 }}>
+                        <button onClick={() => setExpanded((p) => ({ ...p, [rowId]: !p[rowId] }))}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', padding: 4, display: 'flex' }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            {isExp ? <polyline points="18 15 12 9 6 15"/> : <polyline points="6 9 12 15 18 9"/>}
+                          </svg>
+                        </button>
+                      </td>
+                      <td className="td-plate">{s.plateNumber}</td>
+                      <td style={{ fontSize: 'var(--text-xs)' }}>{s.driverPhone}</td>
+                      <td style={{ fontSize: 'var(--text-xs)', maxWidth: 140 }}>{s.destinationName}</td>
+                      <td className="td-slot">{s.slotId}</td>
+                      <td style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-600)' }}>{s.attendantName || '—'}</td>
+                      <td style={{ fontSize: 'var(--text-xs)' }}>{formatDateTime(s.entryTime)}</td>
+                      <td style={{ fontSize: 'var(--text-xs)', color: isActive ? 'var(--gray-400)' : 'var(--gray-700)' }}>{isActive ? '—' : formatDateTime(s.exitTime)}</td>
+                      <td style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: isActive ? 'var(--color-occupied)' : 'var(--gray-600)' }}>{dur}</td>
+                      <td><span className={`badge ${isActive ? 'badge-active' : 'badge-closed'}`}>{isActive ? 'Active' : 'Closed'}</span></td>
+                    </tr>
+                    {isExp && (
+                      <tr key={`${rowId}-exp`} style={{ background: 'var(--gray-50)', borderLeft: `3px solid ${isActive ? 'var(--color-available)' : 'transparent'}` }}>
+                        <td />
+                        <td colSpan={9}>
+                          <div style={{ display: 'flex', gap: 'var(--space-6)', padding: 'var(--space-2) 0 var(--space-3)', flexWrap: 'wrap' }}>
+                            {[['Phone', s.driverPhone], ['Attendant', s.attendantName||'—'], ['Entry', formatDateTime(s.entryTime)], ['Exit', isActive?'—':formatDateTime(s.exitTime)]].map(([k,v]) => (
+                              <div key={k}>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--gray-400)', marginBottom: 2 }}>{k}</div>
+                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-700)' }}>{v}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
