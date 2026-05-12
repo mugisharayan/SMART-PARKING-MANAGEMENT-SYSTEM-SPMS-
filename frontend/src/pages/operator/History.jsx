@@ -92,11 +92,8 @@ export default function OperatorHistory() {
 
   return (
     <div className="page-content">
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div className="page-title">Session History</div>
-          <div className="page-subtitle">All vehicle sessions across all attendants</div>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-5)' }}>
+        <div className="page-subtitle">All vehicle sessions across all attendants</div>
         <div className="live-indicator">LIVE</div>
       </div>
 
