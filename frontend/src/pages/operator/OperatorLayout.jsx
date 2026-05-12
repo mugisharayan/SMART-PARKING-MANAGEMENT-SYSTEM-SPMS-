@@ -21,14 +21,15 @@ export default function OperatorLayout() {
   const { user, clearAuth } = useAuthStore();
   const navigate  = useNavigate();
   const location  = useLocation();
-  const [clock, setClock] = useState('');
+  const [clock,     setClock]     = useState('');
+  const [connected, setConnected] = useState(false);
   const socketInitRef = useRef(false);
 
   const initials = user
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
     : '??';
 
-  /* clock */
+  /* clock — updates every second */
   useEffect(() => {
     const tick = () =>
       setClock(new Date().toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
@@ -37,13 +38,26 @@ export default function OperatorLayout() {
     return () => clearInterval(id);
   }, []);
 
-  /* socket — connect once */
+  /* socket — connect once, track connected state */
   useEffect(() => {
     if (socketInitRef.current) return;
     socketInitRef.current = true;
     const s = getOpSocket();
     if (!s.connected) s.connect();
-    return () => { /* don't disconnect on re-render */ };
+
+    const onConnect    = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
+
+    s.on('connect',    onConnect);
+    s.on('disconnect', onDisconnect);
+
+    /* sync initial state in case already connected */
+    if (s.connected) setConnected(true);
+
+    return () => {
+      s.off('connect',    onConnect);
+      s.off('disconnect', onDisconnect);
+    };
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -87,7 +101,7 @@ export default function OperatorLayout() {
 
   return (
     <div className="app-shell">
-      {/* Sidebar */}
+      {/* ── Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div style={{ position: 'relative', width: 36, height: 36, flexShrink: 0 }}>
@@ -127,7 +141,18 @@ export default function OperatorLayout() {
             <div className="sidebar-avatar">{initials}</div>
             <div className="sidebar-user-info">
               <div className="sidebar-user-name">{user?.name}</div>
-              <div className="sidebar-user-role">Operator</div>
+              {/* socket connection status dot + label */}
+              <div className="sidebar-user-role" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span
+                  title={connected ? 'Live — connected' : 'Reconnecting...'}
+                  style={{
+                    width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                    background: connected ? 'var(--color-available)' : 'var(--color-warning)',
+                    animation: connected ? 'pulse-dot 2s ease-in-out infinite' : 'none',
+                  }}
+                />
+                {connected ? 'Live' : 'Reconnecting...'}
+              </div>
             </div>
             <button className="btn-ghost btn-icon btn-sm" onClick={handleLogout} title="Logout">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -140,7 +165,7 @@ export default function OperatorLayout() {
         </div>
       </aside>
 
-      {/* Main */}
+      {/* ── Main ── */}
       <div className="main-content">
         <header className="topbar">
           <div className="topbar-left">
@@ -148,8 +173,26 @@ export default function OperatorLayout() {
             <div className="live-indicator">LIVE</div>
           </div>
           <div className="topbar-right">
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-500)' }}>{clock}</span>
-            <button className="btn btn-outline btn-sm" onClick={() => navigate('/attendant')}>
+            {/* socket status dot in topbar */}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span
+                title={connected ? 'Live — connected' : 'Reconnecting...'}
+                style={{
+                  width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                  background: connected ? 'var(--color-available)' : 'var(--color-warning)',
+                  boxShadow: connected ? '0 0 0 2px rgba(22,163,74,0.2)' : '0 0 0 2px rgba(217,119,6,0.2)',
+                  animation: connected ? 'pulse-dot 2s ease-in-out infinite' : 'none',
+                }}
+              />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-500)', fontVariantNumeric: 'tabular-nums' }}>
+                {clock}
+              </span>
+            </span>
+            {/* Live Map — opens in new tab so operator stays in their section */}
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => window.open('/attendant', '_blank', 'noopener,noreferrer')}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
               </svg>
