@@ -43,7 +43,13 @@ export default function CameraAnpr({ onPlateDetected, camera = 'entry' }) {
     let cancelled = false;
     (async () => {
       try {
-        const worker = await createWorker('eng', 1, { logger: () => {} });
+        const worker = await createWorker('eng', 1, {
+          logger:     () => {},
+          workerPath: '/tesseract/worker.min.js',
+          corePath:   '/tesseract/tesseract-core-simd-lstm.wasm.js',
+          langPath:   'https://tessdata.projectnaptha.com/4.0.0',
+          cacheMethod: 'none',
+        });
         await worker.setParameters({
           tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
           tessedit_pageseg_mode:   '7',  /* treat image as single line of text */

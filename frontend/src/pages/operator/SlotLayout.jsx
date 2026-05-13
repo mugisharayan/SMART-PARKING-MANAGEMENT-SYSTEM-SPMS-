@@ -48,11 +48,12 @@ function SlotMapLayer({ slots, destinations, landmarks, mode, onSlotClick, onMap
         const ll = e.target.getLatLng();
         slot.lat = parseFloat(ll.lat.toFixed(6));
         slot.lng = parseFloat(ll.lng.toFixed(6));
-        /* persist so position survives page reload */
+        /* persist position to database */
         if (isDemoMode()) {
           saveSlotPosition(slot.slotId, slot.lat, slot.lng);
         } else {
-          api.patch(`/api/slots/${slot._id || slot.id}`, { lat: slot.lat, lng: slot.lng }).catch(() => {});
+          api.patch(`/api/slots/${slot.slotId}`, { lat: slot.lat, lng: slot.lng })
+            .catch(() => {});
         }
       });
       markersRef.current[slot.slotId] = marker;
@@ -287,7 +288,7 @@ export default function SlotLayout() {
       if (isDemoMode()) {
         slot.status = newStatus;
       } else {
-        try { await api.patch(`/api/slots/${slot._id || slot.id}`, { status: newStatus }); }
+        try { await api.patch(`/api/slots/${slot.slotId}`, { status: newStatus }); }
         catch (err) { toast('error', 'Update failed', err.response?.data?.message || ''); return; }
       }
       toast(newStatus === 'AVAILABLE' ? 'success' : 'warning', `Slot ${slot.slotId}`, newStatus === 'AVAILABLE' ? 'Restored to service' : 'Marked out of service');
