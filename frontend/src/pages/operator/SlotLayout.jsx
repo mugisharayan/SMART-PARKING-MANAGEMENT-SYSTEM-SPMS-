@@ -13,26 +13,41 @@ function haversine(la1, lo1, la2, lo2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-const STATUS_COLOR = { AVAILABLE: '#16a34a', OCCUPIED: '#dc2626', OUT_OF_SERVICE: '#6b7280' };
+const STATUS_COLOR  = { AVAILABLE: '#16a34a', OCCUPIED: '#dc2626', OUT_OF_SERVICE: '#6b7280' };
+const STATUS_SHADOW = { AVAILABLE: 'rgba(22,163,74,.45)', OCCUPIED: 'rgba(220,38,38,.45)', OUT_OF_SERVICE: 'rgba(107,114,128,.35)' };
 
 function makeSlotIcon(slot) {
-  const bg    = STATUS_COLOR[slot.status] || '#6b7280';
-  const shape = slot.status === 'AVAILABLE'
-    ? `<circle cx="4" cy="4" r="2.5" fill="rgba(255,255,255,0.75)"/>`
-    : slot.status === 'OCCUPIED'
-    ? `<rect x="1" y="1" width="6" height="6" rx="1" fill="rgba(255,255,255,0.75)"/>`
-    : `<polygon points="4,0.5 7.5,7.5 0.5,7.5" fill="rgba(255,255,255,0.75)"/>`;
+  const fill   = STATUS_COLOR[slot.status]  || '#6b7280';
+  const shadow = STATUS_SHADOW[slot.status] || 'rgba(107,114,128,.35)';
+  const pulse  = slot.status === 'AVAILABLE'
+    ? `<circle cx="14" cy="14" r="13" fill="none" stroke="${fill}" stroke-width="2" opacity="0.35">
+         <animate attributeName="r" from="10" to="18" dur="1.8s" repeatCount="indefinite"/>
+         <animate attributeName="opacity" from="0.5" to="0" dur="1.8s" repeatCount="indefinite"/>
+       </circle>`
+    : '';
+  /* pin body: teardrop path centred at (14,14), tip at bottom (14,34) */
+  const pinPath = 'M14,2 C8.477,2 4,6.477 4,12 C4,19.5 14,34 14,34 C14,34 24,19.5 24,12 C24,6.477 19.523,2 14,2 Z';
+  const label   = slot.slotId.length > 2
+    ? `<text x="14" y="14.5" text-anchor="middle" dominant-baseline="middle" font-size="5.5" font-weight="800" fill="#fff" font-family="'JetBrains Mono',monospace" letter-spacing="-0.3">${slot.slotId}</text>`
+    : `<text x="14" y="14" text-anchor="middle" dominant-baseline="middle" font-size="7" font-weight="800" fill="#fff" font-family="'JetBrains Mono',monospace">${slot.slotId}</text>`;
   return L.divIcon({
     className: '',
-    html: `<div style="background:${bg};color:#fff;font-size:9px;font-weight:700;padding:2px 4px 3px;border-radius:4px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-family:'JetBrains Mono',monospace;text-align:center;min-width:24px;border:1.5px solid rgba(255,255,255,.3);line-height:1">
-      <svg width="8" height="8" viewBox="0 0 8 8" style="display:block;margin:0 auto 2px">${shape}</svg>${slot.slotId}
+    html: `<div style="position:relative;width:28px;height:36px;filter:drop-shadow(0 3px 6px ${shadow})">
+      <svg width="28" height="36" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
+        ${pulse}
+        <path d="${pinPath}" fill="${fill}" stroke="rgba(255,255,255,0.6)" stroke-width="1.2"/>
+        <circle cx="14" cy="12" r="5.5" fill="rgba(255,255,255,0.2)"/>
+        ${label}
+      </svg>
     </div>`,
-    iconAnchor: [12, 13],
+    iconSize:   [28, 36],
+    iconAnchor: [14, 36],
+    popupAnchor:[0, -36],
   });
 }
 
 /* ── Map layer — manages all slot markers imperatively ── */
-function SlotMapLayer({ slots, destinations, landmarks, mode, onSlotClick, onMapClick }) {
+function SlotMapLayer({ slots, destinations, landmarks, mode, onSlotClick, onMapClick, onSlotMoved, onToast }) {
   const map         = useMap();
   const markersRef  = useRef({});
   const landmarkRef = useRef([]);
@@ -45,21 +60,31 @@ function SlotMapLayer({ slots, destinations, landmarks, mode, onSlotClick, onMap
       const marker = L.marker([slot.lat, slot.lng], { icon: makeSlotIcon(slot), draggable: true }).addTo(map);
       marker.on('click', () => { if (mode === 'view') onSlotClick(slot, marker); });
       marker.on('dragend', (e) => {
-        const ll = e.target.getLatLng();
-        slot.lat = parseFloat(ll.lat.toFixed(6));
-        slot.lng = parseFloat(ll.lng.toFixed(6));
-        /* persist position to database */
+        const ll  = e.target.getLatLng();
+        const lat = parseFloat(ll.lat.toFixed(6));
+        const lng = parseFloat(ll.lng.toFixed(6));
+        /* persist position to database, then update React state */
         if (isDemoMode()) {
-          saveSlotPosition(slot.slotId, slot.lat, slot.lng);
+          saveSlotPosition(slot.slotId, lat, lng);
+          onSlotMoved(slot.slotId, lat, lng);
+          onToast('success', `Slot ${slot.slotId} moved`, `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
         } else {
-          api.patch(`/api/slots/${slot.slotId}`, { lat: slot.lat, lng: slot.lng })
-            .catch(() => {});
+          api.patch(`/api/slots/${slot.slotId}`, { lat, lng })
+            .then(() => {
+              onSlotMoved(slot.slotId, lat, lng);
+              onToast('success', `Slot ${slot.slotId} moved`, `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+            })
+            .catch(() => {
+              /* revert marker to last known good position on failure */
+              marker.setLatLng([slot.lat, slot.lng]);
+              onToast('error', `Failed to save ${slot.slotId}`, 'Position not updated');
+            });
         }
       });
       markersRef.current[slot.slotId] = marker;
     });
     return () => { Object.values(markersRef.current).forEach((m) => m.remove()); markersRef.current = {}; };
-  }, [slots, map, mode, onSlotClick]);
+  }, [slots, map, mode, onSlotClick, onSlotMoved]);
 
   /* landmark markers — removed, no overlays on map */
 
@@ -303,6 +328,10 @@ export default function SlotLayout() {
     }
   };
 
+  const handleSlotMoved = useCallback((slotId, lat, lng) => {
+    setSlots((prev) => prev.map((s) => s.slotId === slotId ? { ...s, lat, lng } : s));
+  }, []);
+
   const handleSaveSlot = async ({ slotId, destinationId, lat, lng }) => {
     const newSlot = { _id: 's' + Date.now(), id: 's' + Date.now(), slotId, label: slotId, lat, lng, status: 'AVAILABLE', destinationId };
     if (isDemoMode()) {
@@ -404,6 +433,8 @@ export default function SlotLayout() {
               mode={mode}
               onSlotClick={handleSlotClick}
               onMapClick={handleMapClick}
+              onSlotMoved={handleSlotMoved}
+              onToast={toast}
             />
             <ResetViewControl />
           </MapContainer>

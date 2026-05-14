@@ -16,23 +16,35 @@ function elapsed(entryTime) {
   return `${h}h ${m}m`;
 }
 
-const STATUS_COLOR = { AVAILABLE: '#16a34a', OCCUPIED: '#dc2626', OUT_OF_SERVICE: '#6b7280' };
+const STATUS_COLOR  = { AVAILABLE: '#16a34a', OCCUPIED: '#dc2626', OUT_OF_SERVICE: '#6b7280' };
+const STATUS_SHADOW = { AVAILABLE: 'rgba(22,163,74,.45)', OCCUPIED: 'rgba(220,38,38,.45)', OUT_OF_SERVICE: 'rgba(107,114,128,.35)' };
 
 function makeIcon(slot) {
-  const bg = STATUS_COLOR[slot.status] || '#6b7280';
-  const shape =
-    slot.status === 'AVAILABLE'
-      ? `<circle cx="4" cy="4" r="2.5" fill="rgba(255,255,255,0.75)"/>`
-      : slot.status === 'OCCUPIED'
-      ? `<rect x="1" y="1" width="6" height="6" rx="1" fill="rgba(255,255,255,0.75)"/>`
-      : `<polygon points="4,0.5 7.5,7.5 0.5,7.5" fill="rgba(255,255,255,0.75)"/>`;
+  const fill   = STATUS_COLOR[slot.status]  || '#6b7280';
+  const shadow = STATUS_SHADOW[slot.status] || 'rgba(107,114,128,.35)';
+  const pulse  = slot.status === 'AVAILABLE'
+    ? `<circle cx="14" cy="14" r="13" fill="none" stroke="${fill}" stroke-width="2" opacity="0.35">
+         <animate attributeName="r" from="10" to="18" dur="1.8s" repeatCount="indefinite"/>
+         <animate attributeName="opacity" from="0.5" to="0" dur="1.8s" repeatCount="indefinite"/>
+       </circle>`
+    : '';
+  const pinPath = 'M14,2 C8.477,2 4,6.477 4,12 C4,19.5 14,34 14,34 C14,34 24,19.5 24,12 C24,6.477 19.523,2 14,2 Z';
+  const label   = slot.slotId.length > 2
+    ? `<text x="14" y="14.5" text-anchor="middle" dominant-baseline="middle" font-size="5.5" font-weight="800" fill="#fff" font-family="'JetBrains Mono',monospace" letter-spacing="-0.3">${slot.slotId}</text>`
+    : `<text x="14" y="14" text-anchor="middle" dominant-baseline="middle" font-size="7" font-weight="800" fill="#fff" font-family="'JetBrains Mono',monospace">${slot.slotId}</text>`;
   return L.divIcon({
     className: '',
-    html: `<div style="background:${bg};color:#fff;font-size:9px;font-weight:700;padding:2px 4px 3px;border-radius:4px;box-shadow:0 1px 6px rgba(0,0,0,.28);font-family:'JetBrains Mono',monospace;text-align:center;min-width:24px;border:1.5px solid rgba(255,255,255,.35);cursor:pointer;line-height:1">
-      <svg width="8" height="8" viewBox="0 0 8 8" style="display:block;margin:0 auto 1px">${shape}</svg>
-      ${slot.slotId}
+    html: `<div style="position:relative;width:28px;height:36px;filter:drop-shadow(0 3px 6px ${shadow});cursor:pointer">
+      <svg width="28" height="36" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
+        ${pulse}
+        <path d="${pinPath}" fill="${fill}" stroke="rgba(255,255,255,0.6)" stroke-width="1.2"/>
+        <circle cx="14" cy="12" r="5.5" fill="rgba(255,255,255,0.2)"/>
+        ${label}
+      </svg>
     </div>`,
-    iconAnchor: [12, 14],
+    iconSize:    [28, 36],
+    iconAnchor:  [14, 36],
+    popupAnchor: [0, -36],
   });
 }
 
