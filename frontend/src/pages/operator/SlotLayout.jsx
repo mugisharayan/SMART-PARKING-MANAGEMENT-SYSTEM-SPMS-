@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, Fragment } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -73,11 +73,13 @@ function SlotMapLayer({ slots, destinations, landmarks, mode, onSlotClick, onMap
             .then(() => {
               onSlotMoved(slot.slotId, lat, lng);
               onToast('success', `Slot ${slot.slotId} moved`, `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+              console.log(`✅ Slot ${slot.slotId} position saved to DB: ${lat}, ${lng}`);
             })
-            .catch(() => {
+            .catch((err) => {
               /* revert marker to last known good position on failure */
               marker.setLatLng([slot.lat, slot.lng]);
               onToast('error', `Failed to save ${slot.slotId}`, 'Position not updated');
+              console.error(`❌ Failed to save slot ${slot.slotId}:`, err.response?.data || err.message);
             });
         }
       });
@@ -274,10 +276,32 @@ export default function SlotLayout() {
       return;
     }
     try {
-      const [s, d, l] = await Promise.all([api.get('/api/slots'), api.get('/api/destinations'), api.get('/api/landmarks')]);
-      setSlots(s.data); setDestinations(d.data); setLandmarks(l.data);
-    } catch {
-      setSlots([...demoSlots]); setDestinations([...demoDestinations]); setLandmarks([...demoLandmarks]);
+      /* Fetch slots independently — a missing destinations/landmarks endpoint
+         must NOT cause slots (and their saved positions) to be lost.        */
+      const slotsRes = await api.get('/api/slots');
+      setSlots(slotsRes.data);
+
+      /* Destinations and landmarks are optional — fail gracefully */
+      try {
+        const destRes = await api.get('/api/destinations');
+        setDestinations(destRes.data);
+      } catch {
+        setDestinations([...demoDestinations]);
+      }
+
+      try {
+        const lmRes = await api.get('/api/landmarks');
+        setLandmarks(lmRes.data);
+      } catch {
+        setLandmarks([]);
+      }
+
+    } catch (err) {
+      /* Only fall back to demo data if the slots fetch itself failed */
+      console.error('Failed to load slots from backend:', err.message);
+      setSlots([...demoSlots]);
+      setDestinations([...demoDestinations]);
+      setLandmarks([]);
     } finally {
       setLoading(false);
     }
@@ -499,9 +523,9 @@ export default function SlotLayout() {
                   .map(([key, group]) => {
                     const isCollapsed = collapsed[key];
                     return (
-                      <>
+                      <Fragment key={key}>
                         {/* zone header row */}
-                        <tr key={`hdr-${key}`} style={{ background: 'var(--gray-50)', cursor: 'pointer' }}
+                        <tr style={{ background: 'var(--gray-50)', cursor: 'pointer' }}
                           onClick={() => setCollapsed((p) => ({ ...p, [key]: !p[key] }))}
                         >
                           <td colSpan={7} style={{ padding: 'var(--space-2) var(--space-4)', fontWeight: 700, fontSize: 'var(--text-xs)', color: 'var(--gray-600)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -530,7 +554,7 @@ export default function SlotLayout() {
                             </td>
                           </tr>
                         ))}
-                      </>
+                      </Fragment>
                     );
                   });
               })()}

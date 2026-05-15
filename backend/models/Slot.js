@@ -6,7 +6,7 @@ const slotSchema = new mongoose.Schema({
   lat:           { type: Number, required: true },
   lng:           { type: Number, required: true },
   status:        { type: String, enum: ['AVAILABLE', 'OCCUPIED', 'OUT_OF_SERVICE'], default: 'AVAILABLE' },
-  destinationId: { type: String, required: true },
+  destinationId: { type: String, default: null }, // optional — not required for position updates
 }, { timestamps: true });
 
 module.exports = mongoose.model('Slot', slotSchema);
