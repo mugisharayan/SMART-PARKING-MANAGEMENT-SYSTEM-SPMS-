@@ -111,10 +111,29 @@ export default function Login() {
   const [shake, setShake]             = useState(false);
   const [authOverlay, setAuthOverlay] = useState(false);
 
-  // Count up values
-  const slots = useCountUp(30);
-  const zones = useCountUp(5);
-  const gates = useCountUp(2);
+  // Real stats from database
+  const [liveStats, setLiveStats] = useState({ slots: 0, zones: 0, gates: 2 });
+  useEffect(() => {
+    Promise.all([
+      api.get('/api/slots').catch(() => ({ data: [] })),
+      api.get('/api/destinations').catch(() => ({ data: [] })),
+      api.get('/api/landmarks').catch(() => ({ data: [] })),
+    ]).then(([slotsRes, destsRes, lmRes]) => {
+      const gates = (lmRes.data || []).filter(
+        (l) => l.type === 'ENTRY_GATE' || l.type === 'EXIT_GATE'
+      ).length;
+      setLiveStats({
+        slots: (slotsRes.data || []).length,
+        zones: (destsRes.data || []).length,
+        gates: gates || 2,
+      });
+    });
+  }, []);
+
+  // Count up values — animate to real numbers
+  const slots = useCountUp(liveStats.slots);
+  const zones = useCountUp(liveStats.zones);
+  const gates = useCountUp(liveStats.gates);
 
   // Cycle words with car animation
   useEffect(() => {
