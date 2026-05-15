@@ -16,8 +16,11 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "form-data": "^4.0.1",
     "mongoose": "^9.6.2",
     "nodemon": "^3.1.14",
-    "spms-root": "file:.."
+    "sharp": "^0.33.5",
+    "spms-root": "file:..",
+    "tesseract.js": "^5.1.1"
   }
 }

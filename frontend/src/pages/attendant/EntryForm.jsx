@@ -11,6 +11,27 @@ import CameraAnpr from '../../components/CameraAnpr';
 
 const UGANDA_PHONE    = /^(\+2567\d{8}|07\d{8})$/;
 const SAMPLE_PLATES   = ['UAA 123B', 'UBB 456C', 'UCC 789D', 'UDD 321E', 'UEE 654F', 'UGG 147H'];
+
+/* Accepts all Uganda plate formats:
+   UAA 123B  — standard private
+   UG 1234   — government
+   UP 1234   — police
+   UA 1234   — military
+   TG 1234   — dealer/temporary
+   CD 123    — diplomatic
+   CC 123    — consular                                                    */
+function isValidPlate(plate) {
+  const p = plate.toUpperCase().replace(/\s+/g, ' ').trim();
+  return (
+    /^U[A-Z]{2} \d{3}[A-Z]$/.test(p) ||   // UAA 123B  — standard
+    /^UG \d{3,4}$/.test(p)            ||   // UG 1234   — government
+    /^UP \d{3,4}$/.test(p)            ||   // UP 1234   — police
+    /^UA \d{3,4}$/.test(p)            ||   // UA 1234   — military
+    /^TG \d{3,4}$/.test(p)            ||   // TG 1234   — dealer
+    /^C[DC] \d{2,4}$/.test(p)         ||   // CD/CC 123 — diplomatic
+    /^[A-Z]{2,3} \d{3,4}$/.test(p)        // generic fallback
+  );
+}
 const RECENT_KEY      = 'pms_recent_plates';
 const LONG_STAY_HOURS = 6;
 
@@ -147,6 +168,7 @@ export default function EntryForm() {
   const handleConfirm = async () => {
     const errs = {};
     if (!plate.trim())                                    errs.plate = 'Plate number is required.';
+    else if (!isValidPlate(plate))                        errs.plate = 'Enter a valid Uganda plate (e.g. UAA 123B, UG 1234, CD 45).';
     if (!UGANDA_PHONE.test(phone.replace(/\s/g, '')))    errs.phone = 'Enter a valid Ugandan mobile number.';
     if (!destId)                                          errs.dest  = 'Please select a destination.';
     if (!nearestSlot)                                     errs.dest  = 'No available slots near this destination.';
@@ -273,7 +295,7 @@ export default function EntryForm() {
                     value={plate}
                     onChange={handlePlateChange}
                     onKeyDown={handlePlateKey}
-                    placeholder="e.g. UAA 123B"
+                    placeholder="e.g. UAA 123B, UG 1234, CD 45"
                     disabled={confirmed}
                     style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 700, letterSpacing: '0.1em' }}
                   />
