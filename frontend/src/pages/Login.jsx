@@ -70,12 +70,12 @@ const CYCLING_WORDS = ['Simple...', 'Easy...', 'Quick...'];
 
 const CAR_SVG = (
   <svg width="72" height="34" viewBox="0 0 48 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="6" y="8" width="36" height="11" rx="3" fill="#D4AF37" opacity="0.9"/>
-    <path d="M12 8 L16 2 H32 L36 8Z" fill="#FDE68A" opacity="0.85"/>
+    <rect x="6" y="8" width="36" height="11" rx="3" fill="#1a56db" opacity="0.9"/>
+    <path d="M12 8 L16 2 H32 L36 8Z" fill="#60a5fa" opacity="0.85"/>
     <circle cx="14" cy="20" r="3" fill="#fff" opacity="0.9"/>
     <circle cx="34" cy="20" r="3" fill="#fff" opacity="0.9"/>
     <rect x="34" y="10" width="6" height="4" rx="1" fill="#fff" opacity="0.4"/>
-    <rect x="8" y="10" width="5" height="3" rx="1" fill="#FDE68A" opacity="0.6"/>
+    <rect x="8" y="10" width="5" height="3" rx="1" fill="#93c5fd" opacity="0.6"/>
   </svg>
 );
 
@@ -247,7 +247,7 @@ export default function Login() {
           position:'fixed', top:'20%', left:'20%',
           width:'60%', height:'60%',
           objectFit:'cover',
-          zIndex:1,
+          zIndex:3,
           opacity:1,
           pointerEvents:'none',
         }}
@@ -258,10 +258,10 @@ export default function Login() {
         src={roadImg}
         alt=""
         style={{
-          position:'fixed', top:'72%', left:'20%',
-          width:'60%', height:'20%',
+          position:'fixed', top:'73%', left:'20%',
+          width:'60%', height:'28%',
           objectFit:'cover',
-          zIndex:1,
+          zIndex:2,
           pointerEvents:'none',
         }}
       />
@@ -278,11 +278,11 @@ export default function Login() {
             <div style={{
               width:56, height:56, borderRadius:'50%',
               background:'linear-gradient(135deg, #1a3a6e 0%, #0d1f3c 100%)',
-              border:'1.5px solid rgba(212,175,55,0.5)',
-              boxShadow:'0 0 0 4px rgba(212,175,55,0.08), 0 8px 24px rgba(0,0,0,0.4)',
+              border:'1.5px solid rgba(96,165,250,0.5)',
+              boxShadow:'0 0 0 4px rgba(26,86,219,0.15), 0 8px 24px rgba(0,0,0,0.4)',
               display:'flex', alignItems:'center', justifyContent:'center',
             }}>
-              <span style={{ fontSize:'1.6rem', fontWeight:900, color:'#D4AF37', letterSpacing:'-0.02em', lineHeight:1, textShadow:'0 0 16px rgba(212,175,55,0.6)', fontFamily:'"Plus Jakarta Sans", "Inter", sans-serif' }}>P</span>
+              <span style={{ fontSize:'1.6rem', fontWeight:900, color:'#60a5fa', letterSpacing:'-0.02em', lineHeight:1, textShadow:'0 0 16px rgba(96,165,250,0.6)', fontFamily:'"Plus Jakarta Sans", "Inter", sans-serif' }}>P</span>
             </div>
             <span style={{ position:'absolute', bottom:2, right:2, width:12, height:12, borderRadius:'50%', background:'#4ade80', border:'2px solid #0a0f1e', boxShadow:'0 0 8px rgba(74,222,128,0.8)', animation:'livePulse 2s ease-in-out infinite' }} />
           </div>
@@ -291,14 +291,14 @@ export default function Login() {
           <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
               <span style={{ fontSize:'1.25rem', fontWeight:900, color:'#ffffff', letterSpacing:'0.06em', lineHeight:1, textShadow:'0 2px 8px rgba(0,0,0,0.5)' }}>LUGOGO</span>
-              <span style={{ fontSize:'1.25rem', fontWeight:300, color:'#D4AF37', letterSpacing:'0.06em', lineHeight:1, textShadow:'0 2px 8px rgba(0,0,0,0.5), 0 0 16px rgba(212,175,55,0.5)' }}>SPMS</span>
-              <span style={{ width:1, height:16, background:'rgba(212,175,55,0.35)', display:'inline-block' }} />
+              <span style={{ fontSize:'1.25rem', fontWeight:300, color:'#93c5fd', letterSpacing:'0.06em', lineHeight:1, textShadow:'0 2px 8px rgba(0,0,0,0.5), 0 0 16px rgba(96,165,250,0.4)' }}>SPMS</span>
+              <span style={{ width:1, height:16, background:'rgba(96,165,250,0.35)', display:'inline-block' }} />
               <div style={{ display:'flex', alignItems:'center', gap:5 }}>
                 <span style={{ width:5, height:5, borderRadius:'50%', background:'#4ade80', boxShadow:'0 0 6px #4ade80', flexShrink:0, animation:'livePulse 2s ease-in-out infinite' }} />
-                <span style={{ fontSize:'0.65rem', fontWeight:700, color:'rgba(212,175,55,0.85)', letterSpacing:'0.14em', textTransform:'uppercase' }}>Lugogo Mall · Kampala</span>
+                <span style={{ fontSize:'0.65rem', fontWeight:700, color:'rgba(255,255,255,0.75)', letterSpacing:'0.14em', textTransform:'uppercase' }}>Lugogo Mall · Kampala</span>
               </div>
             </div>
-            <span style={{ fontSize:'0.6rem', fontWeight:600, color:'rgba(212,175,55,0.6)', letterSpacing:'0.22em', textTransform:'uppercase' }}>Smart Parking Management System</span>
+            <span style={{ fontSize:'0.6rem', fontWeight:600, color:'rgba(147,197,253,0.7)', letterSpacing:'0.22em', textTransform:'uppercase' }}>Smart Parking Management System</span>
           </div>
         </div>
 
@@ -320,9 +320,9 @@ export default function Login() {
                 fontSize:'clamp(2rem, 3.8vw, 3.2rem)', fontWeight:900,
                 fontFamily:'"Plus Jakarta Sans", "Inter", system-ui, sans-serif',
                 letterSpacing:'-0.03em',
-                background:'linear-gradient(90deg, #D4AF37 0%, #FDE68A 45%, #C9960C 75%, #D4AF37 100%)',
+                background:'linear-gradient(90deg, #60a5fa 0%, #93c5fd 45%, #3b82f6 75%, #60a5fa 100%)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
-                filter:'drop-shadow(0 2px 6px rgba(212,175,55,0.35))',
+                filter:'drop-shadow(0 2px 6px rgba(96,165,250,0.35))',
                 animation:'slideInLeft 0.8s 0.2s cubic-bezier(0.22,1,0.36,1) both',
                 whiteSpace:'nowrap',
               }}>Made</span>
@@ -349,7 +349,7 @@ export default function Login() {
           </h1>
 
           {/* Single clean description line */}
-          <p style={{ margin:0, fontSize:'0.9rem', color:'rgba(255,255,255,0.65)', lineHeight:1.6, fontWeight:400, textShadow:'0 1px 8px rgba(0,0,0,0.6)', animation:'slideInLeft 0.7s 0.35s cubic-bezier(0.22,1,0.36,1) both', fontFamily:'"Inter", system-ui, sans-serif' }}>
+          <p style={{ margin:0, fontSize:'0.9rem', color:'rgba(255,255,255,0.8)', lineHeight:1.6, fontWeight:400, textShadow:'0 1px 8px rgba(0,0,0,0.6)', animation:'slideInLeft 0.7s 0.35s cubic-bezier(0.22,1,0.36,1) both', fontFamily:'"Inter", system-ui, sans-serif' }}>
             Real-time slots, plate recognition &amp; instant alerts — all from one screen.
           </p>
 
@@ -357,10 +357,10 @@ export default function Login() {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, animation:'slideInLeft 0.7s 0.45s cubic-bezier(0.22,1,0.36,1) both', marginTop:'auto', paddingTop:16, columnGap:12, marginBottom:16 }}>
             {[
               {
-                color:'#D4AF37', glow:'rgba(212,175,55,0.25)', delay:'0.5s',
-                badge:'LIVE', badgeBg:'rgba(212,175,55,0.18)', badgeColor:'#FDE68A',
+                color:'#60a5fa', glow:'rgba(96,165,250,0.25)', delay:'0.5s',
+                badge:'LIVE', badgeBg:'rgba(96,165,250,0.18)', badgeColor:'#93c5fd',
                 icon:(
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2">
                     <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
                     <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
                   </svg>
@@ -470,7 +470,7 @@ export default function Login() {
           animation:'slideInUp 0.7s 0.55s cubic-bezier(0.22,1,0.36,1) both',
         }}>
           {[
-            { val: slots,  label:'Total Slots', color:'#D4AF37',  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
+            { val: slots,  label:'Total Slots', color:'#60a5fa',  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
             { val: zones,  label:'Zones',       color:'#60a5fa',  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> },
             { val: gates,  label:'Gates',       color:'#34d399',  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> },
             { val:'24/7',  label:'Uptime',      color:'#a78bfa',  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
@@ -500,7 +500,7 @@ export default function Login() {
               }}>{val}</div>
               {/* Label */}
               <div style={{
-                fontSize:'0.58rem', color:'rgba(255,255,255,0.55)',
+                fontSize:'0.58rem', color:'rgba(147,197,253,0.8)',
                 textTransform:'uppercase', letterSpacing:'0.14em', fontWeight:700,
                 textShadow:'0 1px 4px rgba(0,0,0,0.5)',
               }}>{label}</div>
@@ -517,7 +517,7 @@ export default function Login() {
         flexDirection:'column',
         alignItems:'center',
         justifyContent:'center',
-        padding:'40px 32px',
+        padding:'140px 32px 40px',
         position:'relative',
         zIndex:4,
         gap:0,
@@ -534,7 +534,7 @@ export default function Login() {
           backdropFilter:'blur(32px)',
           WebkitBackdropFilter:'blur(32px)',
           border:'1px solid rgba(255,255,255,0.18)',
-          borderTop:'3px solid rgba(212,175,55,0.5)',
+          borderTop:'3px solid rgba(26,86,219,0.8)',
           borderRadius:24,
           boxShadow:'0 8px 48px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
           animation: shake ? 'shake 0.5s cubic-bezier(0.36,0.07,0.19,0.97)' : 'none',
@@ -544,7 +544,7 @@ export default function Login() {
           {/* Auth overlay spinner */}
           {authOverlay && (
             <div style={{ position:'absolute', inset:0, background:'rgba(10,15,30,0.6)', backdropFilter:'blur(4px)', borderRadius:24, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', zIndex:10, gap:14 }}>
-              <div style={{ width:44, height:44, border:'3px solid rgba(212,175,55,0.2)', borderTop:'3px solid #D4AF37', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} />
+              <div style={{ width:44, height:44, border:'3px solid rgba(96,165,250,0.2)', borderTop:'3px solid #60a5fa', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} />
               <span style={{ fontSize:'0.85rem', color:'rgba(255,255,255,0.7)', fontWeight:600, letterSpacing:'0.05em' }}>Authenticating...</span>
             </div>
           )}
@@ -555,20 +555,20 @@ export default function Login() {
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:20, textAlign:'center' }}>
             <div style={{
               width:44, height:44, borderRadius:14,
-              background:'linear-gradient(135deg, rgba(212,175,55,0.3) 0%, rgba(26,86,219,0.4) 100%)',
-              border:'1px solid rgba(212,175,55,0.4)',
+              background:'linear-gradient(135deg, rgba(26,86,219,0.5) 0%, rgba(14,165,233,0.4) 100%)',
+              border:'1px solid rgba(96,165,250,0.4)',
               display:'flex', alignItems:'center', justifyContent:'center',
               marginBottom:12,
-              boxShadow:'0 8px 24px rgba(0,0,0,0.3), 0 0 20px rgba(212,175,55,0.15)',
+              boxShadow:'0 8px 24px rgba(0,0,0,0.3), 0 0 20px rgba(26,86,219,0.2)',
               backdropFilter:'blur(8px)',
             }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth="2.2">
                 <rect x="3" y="11" width="18" height="11" rx="2"/>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
             </div>
             <h2 style={{ fontSize:'1.35rem', fontWeight:800, color:'#ffffff', letterSpacing:'-0.03em', margin:0, marginBottom:4, textShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>Sign In</h2>
-            <p style={{ fontSize:'0.78rem', color:'rgba(255,255,255,0.55)', margin:0, lineHeight:1.5 }}>Access the Lugogo Smart Parking System</p>
+            <p style={{ fontSize:'0.78rem', color:'rgba(255,255,255,0.7)', margin:0, lineHeight:1.5 }}>Access the Lugogo Smart Parking System</p>
           </div>
 
           {/* Server error */}
@@ -630,7 +630,7 @@ export default function Login() {
                     boxSizing:'border-box',
                     backdropFilter:'blur(8px)',
                   }}
-                  onFocus={e => { e.target.style.borderColor='#D4AF37'; e.target.style.background='rgba(255,255,255,0.12)'; e.target.style.boxShadow='0 0 0 3px rgba(212,175,55,0.15)'; }}
+                  onFocus={e => { e.target.style.borderColor='#60a5fa'; e.target.style.background='rgba(255,255,255,0.12)'; e.target.style.boxShadow='0 0 0 3px rgba(96,165,250,0.2)'; }}
                   onBlur={e => { e.target.style.borderColor=errors.username?'#f87171':'rgba(255,255,255,0.18)'; e.target.style.background='rgba(255,255,255,0.08)'; e.target.style.boxShadow='none'; }}
                 />
               </div>
@@ -659,7 +659,7 @@ export default function Login() {
                     boxSizing:'border-box',
                     backdropFilter:'blur(8px)',
                   }}
-                  onFocus={e => { e.target.style.borderColor='#D4AF37'; e.target.style.background='rgba(255,255,255,0.12)'; e.target.style.boxShadow='0 0 0 3px rgba(212,175,55,0.15)'; }}
+                  onFocus={e => { e.target.style.borderColor='#60a5fa'; e.target.style.background='rgba(255,255,255,0.12)'; e.target.style.boxShadow='0 0 0 3px rgba(96,165,250,0.2)'; }}
                   onBlur={e => { e.target.style.borderColor=errors.password?'#f87171':'rgba(255,255,255,0.18)'; e.target.style.background='rgba(255,255,255,0.08)'; e.target.style.boxShadow='none'; }}
                 />
                 <button type="button" onClick={() => setShowPw(!showPw)}
@@ -677,12 +677,12 @@ export default function Login() {
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               <label style={{ display:'flex', alignItems:'center', gap:7, cursor:'pointer', fontSize:'0.82rem', color:'rgba(255,255,255,0.7)', userSelect:'none' }}>
                 <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)}
-                  style={{ width:15, height:15, accentColor:'#D4AF37', cursor:'pointer' }} />
+                  style={{ width:15, height:15, accentColor:'#60a5fa', cursor:'pointer' }} />
                 Remember me
               </label>
               <button type="button"
                 onClick={() => { setShowForgot(true); setForgotUsername(''); setForgotStatus(null); setForgotMsg(''); }}
-                style={{ background:'none', border:'none', padding:0, fontSize:'0.82rem', color:'#D4AF37', cursor:'pointer', fontWeight:500 }}>
+                style={{ background:'none', border:'none', padding:0, fontSize:'0.82rem', color:'#93c5fd', cursor:'pointer', fontWeight:500 }}>
                 Forgot password?
               </button>
             </div>
@@ -691,16 +691,16 @@ export default function Login() {
             <button type="submit" disabled={loading}
               style={{
                 width:'100%', padding:'13px',
-                fontSize:'0.9rem', fontWeight:700, color:'#0f172a',
-                background: loading ? 'rgba(212,175,55,0.4)' : 'linear-gradient(135deg, #D4AF37 0%, #FDE68A 50%, #D4AF37 100%)',
+                fontSize:'0.9rem', fontWeight:700, color:'#ffffff',
+                background: loading ? 'rgba(26,86,219,0.4)' : 'linear-gradient(135deg, #1a56db 0%, #3b82f6 50%, #1a56db 100%)',
                 border:'none', borderRadius:10, cursor: loading ? 'not-allowed' : 'pointer',
                 display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-                boxShadow: loading ? 'none' : '0 4px 20px rgba(212,175,55,0.4)',
+                boxShadow: loading ? 'none' : '0 4px 20px rgba(26,86,219,0.5)',
                 transition:'all 0.2s ease', marginTop:4,
                 letterSpacing:'0.02em',
               }}
-              onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow='0 6px 28px rgba(212,175,55,0.55)'; e.currentTarget.style.transform='translateY(-1px)'; }}}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow='0 4px 20px rgba(212,175,55,0.4)'; e.currentTarget.style.transform='translateY(0)'; }}
+              onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow='0 6px 28px rgba(26,86,219,0.65)'; e.currentTarget.style.transform='translateY(-1px)'; }}}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow='0 4px 20px rgba(26,86,219,0.5)'; e.currentTarget.style.transform='translateY(0)'; }}
             >
               {loading ? (
                 <><span className="btn-spinner" /> Authenticating...</>
@@ -741,13 +741,13 @@ export default function Login() {
                     <div style={{ fontSize:'0.75rem', fontWeight:600, color:'rgba(255,255,255,0.8)' }}>{role}</div>
                     <div style={{ fontSize:'0.72rem', color:'rgba(255,255,255,0.4)', fontFamily:'monospace' }}>{username} / {password}</div>
                   </div>
-                  <span style={{ fontSize:'0.72rem', color:'#D4AF37', fontWeight:600 }}>Fill ↗</span>
+                  <span style={{ fontSize:'0.72rem', color:'#60a5fa', fontWeight:600 }}>Fill ↗</span>
                 </div>
               ))}
             </div>
           </details>
 
-          <div style={{ marginTop:24, textAlign:'center', fontSize:'0.7rem', color:'rgba(255,255,255,0.25)' }}>
+          <div style={{ marginTop:24, textAlign:'center', fontSize:'0.7rem', color:'rgba(147,197,253,0.45)' }}>
             Smart Parking Management System &copy; 2025
           </div>
         </div>
