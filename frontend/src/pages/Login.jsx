@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import parkingBg from '../parking-bg.mp4';
+import pngwingImg from '../pngwing.com (1).png';
+import roadImg from '../road.png';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -7,11 +8,11 @@ import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import api from '../lib/api';
 
-// Calligraphy font for heading
-const calligraphyStyle = document.createElement('link');
-calligraphyStyle.rel = 'stylesheet';
-calligraphyStyle.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,700;1,900&family=Satisfy&display=swap';
-if (!document.head.querySelector('[href*="Playfair"]')) document.head.appendChild(calligraphyStyle);
+// Modern professional fonts
+const fontLink = document.createElement('link');
+fontLink.rel = 'stylesheet';
+fontLink.href = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap';
+if (!document.head.querySelector('[href*="Plus+Jakarta"]')) document.head.appendChild(fontLink);
 
 /* ─────────────────────────────────────────────
    Inline SVG icon helpers (no extra deps)
@@ -235,20 +236,40 @@ export default function Login() {
   return (
     <div style={{ minHeight:'100vh', display:'flex', fontFamily:'var(--font-sans)', position:'relative', overflow:'hidden' }}>
 
-      {/* ── Full page background video ── */}
-      <video autoPlay muted loop playsInline
-        style={{ position:'fixed', inset:0, width:'100%', height:'100%', objectFit:'cover', zIndex:0, filter:'brightness(0.5) saturate(1.1)' }}
-        src={parkingBg}
+      {/* ── Background ── */}
+      <div style={{ position:'fixed', inset:0, background:'linear-gradient(135deg, #1a56db 0%, #1342b0 50%, #0f2d7a 100%)', zIndex:0 }} />
+
+      {/* ── pngwing background image ── */}
+      <img
+        src={pngwingImg}
+        alt=""
+        style={{
+          position:'fixed', top:'20%', left:'20%',
+          width:'60%', height:'60%',
+          objectFit:'cover',
+          zIndex:1,
+          opacity:1,
+          pointerEvents:'none',
+        }}
       />
-      <div style={{ position:'fixed', inset:0, background:'rgba(14,42,100,0.4)', zIndex:1 }} />
-      <div style={{ position:'fixed', inset:0, background:'linear-gradient(160deg, rgba(30,64,175,0.55) 0%, rgba(56,116,230,0.3) 45%, rgba(14,42,100,0.6) 100%)', zIndex:2 }} />
-      <div style={{ position:'fixed', bottom:0, left:0, right:0, height:'45%', background:'linear-gradient(to top, rgba(14,42,100,0.65) 0%, transparent 100%)', zIndex:3 }} />
-      <div style={{ position:'fixed', top:0, left:0, right:0, height:'30%', background:'linear-gradient(to bottom, rgba(14,42,100,0.5) 0%, transparent 100%)', zIndex:3 }} />
+
+      {/* ── road image below car ── */}
+      <img
+        src={roadImg}
+        alt=""
+        style={{
+          position:'fixed', top:'72%', left:'20%',
+          width:'60%', height:'20%',
+          objectFit:'cover',
+          zIndex:1,
+          pointerEvents:'none',
+        }}
+      />
 
       {/* ── Left panel ── */}
       <div style={{
         flex:1, display:'flex', flexDirection:'column', justifyContent:'space-between',
-        padding:'40px 5% 40px 6%', position:'relative', gap:0, zIndex:4,
+        padding:'28px 5% 28px 6%', position:'relative', gap:0, zIndex:4,
       }} className="login-left">
 
         {/* ── Logo ── */}
@@ -261,7 +282,7 @@ export default function Login() {
               boxShadow:'0 0 0 4px rgba(212,175,55,0.08), 0 8px 24px rgba(0,0,0,0.4)',
               display:'flex', alignItems:'center', justifyContent:'center',
             }}>
-              <span style={{ fontSize:'1.6rem', fontWeight:900, color:'#D4AF37', letterSpacing:'-0.02em', lineHeight:1, textShadow:'0 0 16px rgba(212,175,55,0.6)', fontFamily:'Inter, sans-serif' }}>P</span>
+              <span style={{ fontSize:'1.6rem', fontWeight:900, color:'#D4AF37', letterSpacing:'-0.02em', lineHeight:1, textShadow:'0 0 16px rgba(212,175,55,0.6)', fontFamily:'"Plus Jakarta Sans", "Inter", sans-serif' }}>P</span>
             </div>
             <span style={{ position:'absolute', bottom:2, right:2, width:12, height:12, borderRadius:'50%', background:'#4ade80', border:'2px solid #0a0f1e', boxShadow:'0 0 8px rgba(74,222,128,0.8)', animation:'livePulse 2s ease-in-out infinite' }} />
           </div>
@@ -282,24 +303,23 @@ export default function Login() {
         </div>
 
         {/* ── Hero Content ── */}
-        <div style={{ position:'relative', zIndex:4, display:'flex', flexDirection:'column', gap:20, flex:1, justifyContent:'center' }}>
+        <div style={{ position:'relative', zIndex:4, display:'flex', flexDirection:'column', gap:14, flex:1, justifyContent:'center', paddingTop:'8%' }}>
 
           {/* Main heading — calligraphic style */}
           <h1 style={{ margin:0, padding:0, lineHeight:1.05, display:'flex', flexDirection:'column', gap:4 }}>
             <span style={{
-              fontSize:'clamp(2.8rem, 5.5vw, 5rem)', fontWeight:900, color:'#ffffff',
+              fontSize:'clamp(2rem, 3.8vw, 3.2rem)', fontWeight:900, color:'#ffffff',
               letterSpacing:'-0.03em',
-              fontFamily:'"Playfair Display", Georgia, serif',
-              fontStyle:'italic',
+              fontFamily:'"Plus Jakarta Sans", "Inter", system-ui, sans-serif',
               textShadow:'0 2px 12px rgba(0,0,0,0.6), 0 4px 32px rgba(0,0,0,0.4)',
               animation:'slideInLeft 0.8s cubic-bezier(0.22,1,0.36,1) both',
               display:'block', whiteSpace:'nowrap',
             }}>Intelligent Parking</span>
-            <span style={{ display:'flex', alignItems:'center', gap:16, flexWrap:'nowrap' }}>
+            <span style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'nowrap' }}>
               <span style={{
-                fontSize:'clamp(2.8rem, 5.5vw, 5rem)', fontWeight:900,
-                fontFamily:'"Playfair Display", Georgia, serif',
-                fontStyle:'italic', letterSpacing:'-0.03em',
+                fontSize:'clamp(2rem, 3.8vw, 3.2rem)', fontWeight:900,
+                fontFamily:'"Plus Jakarta Sans", "Inter", system-ui, sans-serif',
+                letterSpacing:'-0.03em',
                 background:'linear-gradient(90deg, #D4AF37 0%, #FDE68A 45%, #C9960C 75%, #D4AF37 100%)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
                 filter:'drop-shadow(0 2px 6px rgba(212,175,55,0.35))',
@@ -307,10 +327,10 @@ export default function Login() {
                 whiteSpace:'nowrap',
               }}>Made</span>
               <span style={{
-                fontSize:'clamp(2.8rem, 5.5vw, 5rem)', fontWeight:900,
-                fontFamily:'"Playfair Display", Georgia, serif',
-                fontStyle:'italic', letterSpacing:'-0.03em', color:'#ffffff',
-                display:'inline-flex', alignItems:'center', minWidth:'clamp(160px, 18vw, 260px)', overflow:'hidden',
+                fontSize:'clamp(2rem, 3.8vw, 3.2rem)', fontWeight:900,
+                fontFamily:'"Plus Jakarta Sans", "Inter", system-ui, sans-serif',
+                letterSpacing:'-0.03em', color:'#ffffff',
+                display:'inline-flex', alignItems:'center', minWidth:'clamp(120px, 14vw, 200px)', overflow:'hidden',
                 position:'relative', whiteSpace:'nowrap',
               }}>
                 <span style={{
@@ -329,26 +349,108 @@ export default function Login() {
           </h1>
 
           {/* Single clean description line */}
-          <p style={{ margin:0, fontSize:'1.1rem', color:'rgba(255,255,255,0.8)', lineHeight:1.7, fontWeight:700, textShadow:'0 1px 8px rgba(0,0,0,0.6)', animation:'slideInLeft 0.7s 0.35s cubic-bezier(0.22,1,0.36,1) both', fontFamily:'"Playfair Display", Georgia, serif', fontStyle:'italic', letterSpacing:'0.01em' }}>
-            Real-time slot control, automated plate recognition, and instant driver notifications — all from one screen.
+          <p style={{ margin:0, fontSize:'0.9rem', color:'rgba(255,255,255,0.65)', lineHeight:1.6, fontWeight:400, textShadow:'0 1px 8px rgba(0,0,0,0.6)', animation:'slideInLeft 0.7s 0.35s cubic-bezier(0.22,1,0.36,1) both', fontFamily:'"Inter", system-ui, sans-serif' }}>
+            Real-time slots, plate recognition &amp; instant alerts — all from one screen.
           </p>
 
-          <div style={{ display:'flex', flexDirection:'column', position:'relative', animation:'slideInLeft 0.7s 0.45s cubic-bezier(0.22,1,0.36,1) both' }}>
-            <div style={{ position:'absolute', left:17, top:28, bottom:28, width:2, background:'linear-gradient(to bottom, #D4AF37, #60a5fa, #34d399, #a78bfa)', opacity:0.5, borderRadius:2 }} />
+          {/* ── Feature cards 2×2 grid ── */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, animation:'slideInLeft 0.7s 0.45s cubic-bezier(0.22,1,0.36,1) both', marginTop:'auto', paddingTop:16, columnGap:12, marginBottom:16 }}>
             {[
-              { color:'#D4AF37', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, label:'Real-time Slots', desc:'Live visibility across all zones', delay:'0.5s' },
-              { color:'#60a5fa', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/></svg>, label:'Plate Recognition', desc:'Automated number plate capture', delay:'0.65s' },
-              { color:'#34d399', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, label:'Driver Alerts', desc:'Instant operator notifications', delay:'0.8s' },
-              { color:'#a78bfa', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, label:'Live Analytics', desc:'Occupancy reports & insights', delay:'0.95s' },
-            ].map(({ color, icon, label, desc, delay }) => (
-              <div key={label} style={{ display:'flex', alignItems:'center', gap:16, padding:'10px 8px', position:'relative', animation:`slideToRight 0.6s ${delay} cubic-bezier(0.22,1,0.36,1) both`, borderRadius:12, transition:'background 0.2s, transform 0.2s', cursor:'default' }}
-                onMouseEnter={e => { e.currentTarget.style.background=`${color}12`; e.currentTarget.style.transform='translateX(8px)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.transform='translateX(0)'; }}
+              {
+                color:'#D4AF37', glow:'rgba(212,175,55,0.25)', delay:'0.5s',
+                badge:'LIVE', badgeBg:'rgba(212,175,55,0.18)', badgeColor:'#FDE68A',
+                icon:(
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+                  </svg>
+                ),
+                label:'Real-time Slots', desc:'Live visibility across all zones',
+              },
+              {
+                color:'#60a5fa', glow:'rgba(96,165,250,0.25)', delay:'0.6s',
+                badge:'AUTO', badgeBg:'rgba(96,165,250,0.18)', badgeColor:'#93c5fd',
+                icon:(
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2">
+                    <rect x="2" y="7" width="20" height="10" rx="2"/>
+                    <path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/>
+                    <line x1="12" y1="12" x2="12.01" y2="12" strokeWidth="3"/>
+                  </svg>
+                ),
+                label:'Plate Recognition', desc:'Automated number plate capture',
+              },
+              {
+                color:'#34d399', glow:'rgba(52,211,153,0.25)', delay:'0.7s',
+                badge:'INSTANT', badgeBg:'rgba(52,211,153,0.18)', badgeColor:'#6ee7b7',
+                icon:(
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                  </svg>
+                ),
+                label:'Driver Alerts', desc:'Instant operator notifications',
+              },
+              {
+                color:'#a78bfa', glow:'rgba(167,139,250,0.25)', delay:'0.8s',
+                badge:'24/7', badgeBg:'rgba(167,139,250,0.18)', badgeColor:'#c4b5fd',
+                icon:(
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                  </svg>
+                ),
+                label:'Live Analytics', desc:'Occupancy reports & insights',
+              },
+            ].map(({ color, glow, delay, badge, badgeBg, badgeColor, icon, label, desc }) => (
+              <div key={label}
+                style={{
+                  position:'relative', padding:'8px 9px 7px',
+                  background:'rgba(255,255,255,0.05)',
+                  border:`1px solid rgba(255,255,255,0.09)`,
+                  borderRadius:10,
+                  backdropFilter:'blur(12px)',
+                  display:'flex', flexDirection:'column', gap:5,
+                  animation:`featureCardIn 0.55s ${delay} cubic-bezier(0.22,1,0.36,1) both`,
+                  transition:'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+                  cursor:'default', overflow:'hidden',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform='translateY(-2px)';
+                  e.currentTarget.style.boxShadow=`0 6px 20px ${glow}, 0 2px 6px rgba(0,0,0,0.3)`;
+                  e.currentTarget.style.borderColor=`${color}55`;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform='translateY(0)';
+                  e.currentTarget.style.boxShadow='none';
+                  e.currentTarget.style.borderColor='rgba(255,255,255,0.1)';
+                }}
               >
-                <div style={{ width:42, height:42, borderRadius:'50%', flexShrink:0, background:`${color}20`, border:`2px solid ${color}`, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 0 16px ${color}50`, zIndex:1 }}>{icon}</div>
+                {/* Top accent line */}
+                <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:`linear-gradient(90deg, transparent, ${color}, transparent)`, borderRadius:'12px 12px 0 0' }} />
+
+                {/* Icon + badge row */}
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div style={{
+                    width:26, height:26, borderRadius:7,
+                    background:`${color}18`,
+                    border:`1px solid ${color}40`,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    flexShrink:0,
+                  }}>{icon}</div>
+                  <span style={{
+                    fontSize:'0.5rem', fontWeight:700, letterSpacing:'0.07em',
+                    color: badgeColor, background: badgeBg,
+                    border:`1px solid ${color}30`,
+                    padding:'2px 4px', borderRadius:20,
+                    textTransform:'uppercase',
+                  }}>{badge}</span>
+                </div>
+
+                {/* Text */}
                 <div>
-                  <div style={{ fontSize:'0.95rem', fontWeight:700, color:'#fff', letterSpacing:'0.02em', lineHeight:1.2 }}>{label}</div>
-                  <div style={{ fontSize:'0.78rem', color:'rgba(255,255,255,0.5)', marginTop:3 }}>{desc}</div>
+                  <div style={{ fontSize:'0.72rem', fontWeight:700, color:'#ffffff', lineHeight:1.2, letterSpacing:'-0.01em', fontFamily:'"Plus Jakarta Sans", sans-serif' }}>{label}</div>
+                  <div style={{ fontSize:'0.6rem', color:'rgba(255,255,255,0.4)', marginTop:1, lineHeight:1.3 }}>{desc}</div>
                 </div>
               </div>
             ))}
@@ -376,10 +478,10 @@ export default function Login() {
             <div key={label} style={{
               flex:1,
               display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-              padding:'14px 8px',
+              padding:'10px 6px',
               borderRight: i < 3 ? '1px solid rgba(255,255,255,0.08)' : 'none',
               position:'relative',
-              gap:6,
+              gap:4,
             }}>
               {/* Colored glow dot at top */}
               <div style={{
@@ -392,7 +494,7 @@ export default function Login() {
               <span style={{ color, opacity:0.9, filter:`drop-shadow(0 0 6px ${color})` }}>{icon}</span>
               {/* Value */}
               <div style={{
-                fontSize:'1.5rem', fontWeight:900, color:'#ffffff',
+                fontSize:'1.2rem', fontWeight:900, color:'#ffffff',
                 letterSpacing:'-0.04em', lineHeight:1,
                 textShadow:`0 2px 8px rgba(0,0,0,0.5), 0 0 20px rgba(255,255,255,0.15)`,
               }}>{val}</div>
@@ -405,24 +507,29 @@ export default function Login() {
             </div>
           ))}
         </div>
+
+
       </div>
 
       {/* ── Right panel — Glassmorphism card ── */}
       <div style={{
         display:'flex',
+        flexDirection:'column',
         alignItems:'center',
         justifyContent:'center',
-        padding:'40px 48px',
+        padding:'40px 32px',
         position:'relative',
         zIndex:4,
+        gap:0,
       }}>
+
         <div style={{
-          width:420,
+          width:360,
           display:'flex',
           flexDirection:'column',
           justifyContent:'center',
           alignItems:'center',
-          padding:'40px 36px',
+          padding:'28px 28px',
           background:'rgba(255,255,255,0.08)',
           backdropFilter:'blur(32px)',
           WebkitBackdropFilter:'blur(32px)',
@@ -445,23 +552,23 @@ export default function Login() {
         <div style={{ width:'100%', maxWidth:360, display:'flex', flexDirection:'column', gap:0 }}>
 
           {/* Lock icon + heading */}
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:28, textAlign:'center' }}>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:20, textAlign:'center' }}>
             <div style={{
-              width:52, height:52, borderRadius:16,
+              width:44, height:44, borderRadius:14,
               background:'linear-gradient(135deg, rgba(212,175,55,0.3) 0%, rgba(26,86,219,0.4) 100%)',
               border:'1px solid rgba(212,175,55,0.4)',
               display:'flex', alignItems:'center', justifyContent:'center',
-              marginBottom:14,
+              marginBottom:12,
               boxShadow:'0 8px 24px rgba(0,0,0,0.3), 0 0 20px rgba(212,175,55,0.15)',
               backdropFilter:'blur(8px)',
             }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.2">
                 <rect x="3" y="11" width="18" height="11" rx="2"/>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
             </div>
-            <h2 style={{ fontSize:'1.6rem', fontWeight:800, color:'#ffffff', letterSpacing:'-0.03em', margin:0, marginBottom:6, textShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>Sign In</h2>
-            <p style={{ fontSize:'0.82rem', color:'rgba(255,255,255,0.55)', margin:0, lineHeight:1.5 }}>Access the Lugogo Smart Parking System</p>
+            <h2 style={{ fontSize:'1.35rem', fontWeight:800, color:'#ffffff', letterSpacing:'-0.03em', margin:0, marginBottom:4, textShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>Sign In</h2>
+            <p style={{ fontSize:'0.78rem', color:'rgba(255,255,255,0.55)', margin:0, lineHeight:1.5 }}>Access the Lugogo Smart Parking System</p>
           </div>
 
           {/* Server error */}
@@ -499,7 +606,7 @@ export default function Login() {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit(onSubmit)} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <form onSubmit={handleSubmit(onSubmit)} style={{ display:'flex', flexDirection:'column', gap:12 }}>
 
             {/* Username */}
             <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -645,6 +752,7 @@ export default function Login() {
           </div>
         </div>
         </div>
+
       </div>
 
       {/* ── Forgot Password Modal ── */}
@@ -819,6 +927,10 @@ export default function Login() {
         @keyframes slideToRight {
           from { opacity:0; transform:translateX(-40px); }
           to   { opacity:1; transform:translateX(0); }
+        }
+        @keyframes featureCardIn {
+          from { opacity:0; transform:translateY(20px) scale(0.96); }
+          to   { opacity:1; transform:translateY(0) scale(1); }
         }
         @keyframes spin {
           to { transform:rotate(360deg); }
