@@ -286,7 +286,7 @@ export default function ExitForm() {
                   className={`input${plateError ? ' error' : ''}`}
                   value={plate}
                   onChange={handlePlateChange}
-                  placeholder="e.g. UAA 123B, UG 1234, CD 45"
+                  placeholder="e.g. UA 123B, UAA 123B, UG 1234, H4DF 001"
                   style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 700, letterSpacing: '0.1em' }}
                 />
               </div>

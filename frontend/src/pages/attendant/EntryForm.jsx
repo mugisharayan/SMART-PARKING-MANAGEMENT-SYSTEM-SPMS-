@@ -12,24 +12,28 @@ import CameraAnpr from '../../components/CameraAnpr';
 const UGANDA_PHONE    = /^(\+2567\d{8}|07\d{8})$/;
 const SAMPLE_PLATES   = ['UAA 123B', 'UBB 456C', 'UCC 789D', 'UDD 321E', 'UEE 654F', 'UGG 147H'];
 
-/* Accepts all Uganda plate formats:
-   UAA 123B  — standard private
-   UG 1234   — government
-   UP 1234   — police
-   UA 1234   — military
-   TG 1234   — dealer/temporary
-   CD 123    — diplomatic
-   CC 123    — consular                                                    */
+/* Accepts all Uganda plate formats (old and new digital):
+   NEW digital:  UA 123B   — U + 1 letter + 3 digits + 1 letter
+   OLD private:  UAA 123B  — U + 2 letters + 3 digits + 1 letter
+   Government:   UG 1234   — UG + 3-4 digits (+ optional letter)
+   Local Govt:   LG 1234   — LG + 3-4 digits
+   Military:     H4DF 001  — H4DF + 3 digits
+   Police:       UP 1234   — UP + 3-4 digits
+   Dealer:       TG 1234   — TG + 3-4 digits
+   Diplomatic:   CD 28 U   — CD/CC + digits + U
+   Personal:     BOSS1     — custom 3-7 alphanumeric                 */
 function isValidPlate(plate) {
   const p = plate.toUpperCase().replace(/\s+/g, ' ').trim();
   return (
-    /^U[A-Z]{2} \d{3}[A-Z]$/.test(p) ||   // UAA 123B  — standard
-    /^UG \d{3,4}$/.test(p)            ||   // UG 1234   — government
-    /^UP \d{3,4}$/.test(p)            ||   // UP 1234   — police
-    /^UA \d{3,4}$/.test(p)            ||   // UA 1234   — military
-    /^TG \d{3,4}$/.test(p)            ||   // TG 1234   — dealer
-    /^C[DC] \d{2,4}$/.test(p)         ||   // CD/CC 123 — diplomatic
-    /^[A-Z]{2,3} \d{3,4}$/.test(p)        // generic fallback
+    /^U[A-Z] \d{3}[A-Z]$/.test(p)       ||  // UA 123B  — new digital
+    /^U[A-Z]{2} \d{3}[A-Z]$/.test(p)    ||  // UAA 123B — old private
+    /^H4DF \d{3}$/.test(p)              ||  // H4DF 001 — military
+    /^UG \d{3,4}( [A-Z])?$/.test(p)     ||  // UG 1234  — government
+    /^LG \d{3,4}$/.test(p)              ||  // LG 1234  — local govt
+    /^UP \d{3,4}$/.test(p)              ||  // UP 1234  — police
+    /^TG \d{3,4}$/.test(p)              ||  // TG 1234  — dealer
+    /^C[DC] \d{2,6}( U)?$/.test(p)      ||  // CD 28 U  — diplomatic
+    /^[A-Z0-9]{3,7}$/.test(p.replace(/\s/g,'')) // personal/vanity
   );
 }
 const RECENT_KEY      = 'pms_recent_plates';
@@ -168,7 +172,7 @@ export default function EntryForm() {
   const handleConfirm = async () => {
     const errs = {};
     if (!plate.trim())                                    errs.plate = 'Plate number is required.';
-    else if (!isValidPlate(plate))                        errs.plate = 'Enter a valid Uganda plate (e.g. UAA 123B, UG 1234, CD 45).';
+    else if (!isValidPlate(plate))                        errs.plate = 'Enter a valid Uganda plate (e.g. UA 123B, UAA 123B, UG 1234, H4DF 001).';
     if (!UGANDA_PHONE.test(phone.replace(/\s/g, '')))    errs.phone = 'Enter a valid Ugandan mobile number.';
     if (!destId)                                          errs.dest  = 'Please select a destination.';
     if (!nearestSlot)                                     errs.dest  = 'No available slots near this destination.';
@@ -295,7 +299,7 @@ export default function EntryForm() {
                     value={plate}
                     onChange={handlePlateChange}
                     onKeyDown={handlePlateKey}
-                    placeholder="e.g. UAA 123B, UG 1234, CD 45"
+                    placeholder="e.g. UA 123B, UAA 123B, UG 1234, H4DF 001"
                     disabled={confirmed}
                     style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 700, letterSpacing: '0.1em' }}
                   />
