@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../lib/api';
 import { getOpSocket } from './OperatorLayout';
-import { isDemoMode, demoSessions } from '../../lib/demo';
 
 function formatDateTime(d) {
   if (!d) return '—';
@@ -76,7 +75,7 @@ export default function BarrierLog() {
 
   const load = useCallback(async () => {
     try {
-      if (isDemoMode()) { setLogs(buildLogs(demoSessions)); return; }
+      /* Try dedicated barrier-logs endpoint first, fall back to building from sessions */
       try {
         const { data } = await api.get('/api/barrier-logs');
         setLogs(Array.isArray(data) ? data : data.logs || []);
@@ -84,8 +83,12 @@ export default function BarrierLog() {
         const { data } = await api.get('/api/sessions');
         setLogs(buildLogs(Array.isArray(data) ? data : data.sessions || []));
       }
-    } catch { setLogs(buildLogs(demoSessions)); }
-    finally  { setLoading(false); }
+    } catch (err) {
+      console.error('BarrierLog load failed:', err.message);
+      setLogs([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

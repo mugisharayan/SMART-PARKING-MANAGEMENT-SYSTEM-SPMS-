@@ -2,44 +2,27 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../../lib/api';
 import { getSocket } from './AttendantLayout';
-import {
-  isDemoMode, demoDestinations, demoNearestSlot,
-  demoCreateSession, demoActiveSessionForPlate,
-} from '../../lib/demo';
 import useAuthStore from '../../store/authStore';
 import CameraAnpr from '../../components/CameraAnpr';
 
-const UGANDA_PHONE    = /^(\+2567\d{8}|07\d{8})$/;
-const SAMPLE_PLATES   = ['UAA 123B', 'UBB 456C', 'UCC 789D', 'UDD 321E', 'UEE 654F', 'UGG 147H'];
+const UGANDA_PHONE = /^(\+2567\d{8}|07\d{8})$/;
+const RECENT_KEY   = 'pms_recent_plates';
 
-/* Accepts all Uganda plate formats (old and new digital):
-   NEW digital:  UA 123B   — U + 1 letter + 3 digits + 1 letter
-   OLD private:  UAA 123B  — U + 2 letters + 3 digits + 1 letter
-   Government:   UG 1234   — UG + 3-4 digits (+ optional letter)
-   Local Govt:   LG 1234   — LG + 3-4 digits
-   Military:     H4DF 001  — H4DF + 3 digits
-   Police:       UP 1234   — UP + 3-4 digits
-   Dealer:       TG 1234   — TG + 3-4 digits
-   Diplomatic:   CD 28 U   — CD/CC + digits + U
-   Personal:     BOSS1     — custom 3-7 alphanumeric                 */
 function isValidPlate(plate) {
   const p = plate.toUpperCase().replace(/\s+/g, ' ').trim();
   return (
-    /^U[A-Z] \d{3}[A-Z]$/.test(p)       ||  // UA 123B  — new digital
-    /^U[A-Z]{2} \d{3}[A-Z]$/.test(p)    ||  // UAA 123B — old private
-    /^H4DF \d{3}$/.test(p)              ||  // H4DF 001 — military
-    /^UG \d{3,4}( [A-Z])?$/.test(p)     ||  // UG 1234  — government
-    /^LG \d{3,4}$/.test(p)              ||  // LG 1234  — local govt
-    /^UP \d{3,4}$/.test(p)              ||  // UP 1234  — police
-    /^TG \d{3,4}$/.test(p)              ||  // TG 1234  — dealer
-    /^C[DC] \d{2,6}( U)?$/.test(p)      ||  // CD 28 U  — diplomatic
-    /^[A-Z0-9]{3,7}$/.test(p.replace(/\s/g,'')) // personal/vanity
+    /^U[A-Z] \d{3}[A-Z]$/.test(p)       ||
+    /^U[A-Z]{2} \d{3}[A-Z]$/.test(p)    ||
+    /^H4DF \d{3}$/.test(p)              ||
+    /^UG \d{3,4}( [A-Z])?$/.test(p)     ||
+    /^LG \d{3,4}$/.test(p)              ||
+    /^UP \d{3,4}$/.test(p)              ||
+    /^TG \d{3,4}$/.test(p)              ||
+    /^C[DC] \d{2,6}( U)?$/.test(p)      ||
+    /^[A-Z0-9]{3,7}$/.test(p.replace(/\s/g, ''))
   );
 }
-const RECENT_KEY      = 'pms_recent_plates';
-const LONG_STAY_HOURS = 6;
 
-/* ── recent plates helpers ── */
 function getRecentPlates() {
   try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
 }
@@ -64,88 +47,62 @@ function BarrierWidget({ open }) {
 }
 
 export default function EntryForm() {
-  const { user }          = useAuthStore();
-  const [searchParams]    = useSearchParams();
-  const preselectedSlotId = searchParams.get('slotId'); // from LiveMap "Start Entry" button
+  const { user }       = useAuthStore();
+  const [searchParams] = useSearchParams();
 
-  /* form fields */
-  const [plate,    setPlate]    = useState('');
-  const [phone,    setPhone]    = useState('');
-  const [destId,   setDestId]   = useState('');
-  const [errors,   setErrors]   = useState({});
-
-  /* data */
+  const [plate,         setPlate]         = useState('');
+  const [phone,         setPhone]         = useState('');
+  const [destId,        setDestId]        = useState('');
+  const [errors,        setErrors]        = useState({});
   const [destinations,  setDestinations]  = useState([]);
   const [nearestSlot,   setNearestSlot]   = useState(null);
   const [loadingSlot,   setLoadingSlot]   = useState(false);
   const [recentPlates,  setRecentPlates]  = useState(getRecentPlates());
+  const [dupSession,    setDupSession]    = useState(null);
+  const [loading,       setLoading]       = useState(false);
+  const [confirmed,     setConfirmed]     = useState(false);
+  const [barrierOpen,   setBarrierOpen]   = useState(false);
+  const [session,       setSession]       = useState(null);
+  const [notifyStatus,  setNotifyStatus]  = useState({});
 
-  /* ANPR */
-  const [anprStatus, setAnprStatus] = useState('idle');
-  const [anprPlate,  setAnprPlate]  = useState('');
-  const timerRef = useRef(null);
+  const phoneRef = useRef(null);
+  const destRef  = useRef(null);
 
-  /* duplicate plate warning */
-  const [dupSession, setDupSession] = useState(null);
-
-  /* confirmed state */
-  const [loading,      setLoading]      = useState(false);
-  const [confirmed,    setConfirmed]    = useState(false);
-  const [barrierOpen,  setBarrierOpen]  = useState(false);
-  const [session,      setSession]      = useState(null);
-  const [notifyStatus, setNotifyStatus] = useState({});
-
-  /* fetch destinations */
+  /* load destinations from backend */
   useEffect(() => {
-    if (isDemoMode()) { setDestinations(demoDestinations); return; }
-    api.get('/api/destinations').then(({ data }) => setDestinations(data)).catch(() => setDestinations(demoDestinations));
+    api.get('/api/destinations')
+      .then(({ data }) => setDestinations(data))
+      .catch(() => setDestinations([]));
   }, []);
 
-  /* ANPR simulation */
-  const simulate = useCallback(() => {
-    const p = SAMPLE_PLATES[Math.floor(Math.random() * SAMPLE_PLATES.length)];
-    setAnprStatus('scanning'); setAnprPlate('');
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      setAnprStatus('captured'); setAnprPlate(p); setPlate(p);
-      checkDuplicate(p);
-    }, 2000);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
+  /* socket: listen for ANPR events from hardware scanner */
   useEffect(() => {
     const s = getSocket();
     const onAnpr = ({ camera, plate: p }) => {
-      if (camera === 'entry') { setAnprStatus('captured'); setAnprPlate(p); setPlate(p); checkDuplicate(p); }
+      if (camera === 'entry') {
+        setPlate(p);
+        checkDuplicate(p);
+      }
     };
     s.on('anpr_plate_read', onAnpr);
-    if (isDemoMode()) simulate();
-    return () => { s.off('anpr_plate_read', onAnpr); clearTimeout(timerRef.current); };
-  }, [simulate]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => s.off('anpr_plate_read', onAnpr);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* duplicate check */
   const checkDuplicate = useCallback(async (p) => {
     if (!p.trim()) { setDupSession(null); return; }
     try {
-      if (isDemoMode()) {
-        setDupSession(demoActiveSessionForPlate(p));
-      } else {
-        const { data } = await api.get(`/api/sessions/active?plate=${encodeURIComponent(p.trim())}`);
-        setDupSession(data || null);
-      }
+      const { data } = await api.get(`/api/sessions/active?plate=${encodeURIComponent(p.trim())}`);
+      setDupSession(data || null);
     } catch { setDupSession(null); }
   }, []);
 
-  /* nearest slot preview */
   const previewSlot = useCallback(async (dId) => {
     if (!dId) { setNearestSlot(null); return; }
     setLoadingSlot(true);
     try {
-      if (isDemoMode()) { setNearestSlot(demoNearestSlot(dId)); }
-      else {
-        const { data } = await api.get(`/api/slots/nearest?destinationId=${dId}`);
-        setNearestSlot(data);
-      }
-    } catch { setNearestSlot(demoNearestSlot(dId)); }
+      const { data } = await api.get(`/api/slots/nearest?destinationId=${dId}`);
+      setNearestSlot(data);
+    } catch { setNearestSlot(null); }
     finally { setLoadingSlot(false); }
   }, []);
 
@@ -162,44 +119,27 @@ export default function EntryForm() {
     checkDuplicate(v);
   };
 
-  /* keyboard: Enter advances focus */
-  const phoneRef = useRef(null);
-  const destRef  = useRef(null);
   const handlePlateKey = (e) => { if (e.key === 'Enter') phoneRef.current?.focus(); };
   const handlePhoneKey = (e) => { if (e.key === 'Enter') destRef.current?.focus(); };
 
-  /* confirm */
   const handleConfirm = async () => {
     const errs = {};
-    if (!plate.trim())                                    errs.plate = 'Plate number is required.';
-    else if (!isValidPlate(plate))                        errs.plate = 'Enter a valid Uganda plate (e.g. UA 123B, UAA 123B, UG 1234, H4DF 001).';
-    if (!UGANDA_PHONE.test(phone.replace(/\s/g, '')))    errs.phone = 'Enter a valid Ugandan mobile number.';
-    if (!destId)                                          errs.dest  = 'Please select a destination.';
-    if (!nearestSlot)                                     errs.dest  = 'No available slots near this destination.';
+    if (!plate.trim())                                 errs.plate = 'Plate number is required.';
+    else if (!isValidPlate(plate))                     errs.plate = 'Enter a valid Uganda plate (e.g. UA 123B, UAA 123B, UG 1234, H4DF 001).';
+    if (!UGANDA_PHONE.test(phone.replace(/\s/g, ''))) errs.phone = 'Enter a valid Ugandan mobile number.';
+    if (!destId)                                       errs.dest  = 'Please select a destination.';
+    if (!nearestSlot)                                  errs.dest  = 'No available slots near this destination.';
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
     setLoading(true);
     try {
-      const dest = destinations.find((d) => (d._id || d.id) === destId);
-      let sess;
-      if (isDemoMode()) {
-        sess = demoCreateSession({
-          plateNumber: plate.trim().toUpperCase().replace(/\s+/g, ' '),
-          driverPhone: phone.trim(),
-          destinationId: destId,
-          slotId: nearestSlot.slotId,
-          attendantName: user?.name || 'Attendant',
-          attendantId:   user?.id   || 'u2',
-        });
-      } else {
-        const { data } = await api.post('/api/sessions', {
-          plateNumber:   plate.trim().toUpperCase().replace(/\s+/g, ' '),
-          driverPhone:   phone.trim(),
-          destinationId: destId,
-          slotId:        nearestSlot.slotId,
-        });
-        sess = data.session || data;
-      }
+      const { data } = await api.post('/api/sessions', {
+        plateNumber:   plate.trim().toUpperCase().replace(/\s+/g, ' '),
+        driverPhone:   phone.trim(),
+        destinationId: destId,
+        slotId:        nearestSlot.slotId,
+      });
+      const sess = data.session || data;
       pushRecentPlate(plate.trim().toUpperCase().replace(/\s+/g, ' '));
       setRecentPlates(getRecentPlates());
       setSession(sess);
@@ -210,16 +150,6 @@ export default function EntryForm() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const sendNotify = async (channel) => {
-    if (!session) return;
-    setNotifyStatus((p) => ({ ...p, [channel]: 'sending' }));
-    try {
-      if (isDemoMode()) { await new Promise((r) => setTimeout(r, 1200)); }
-      else { await api.post('/api/notifications/send', { sessionId: session._id, channel }); }
-      setNotifyStatus((p) => ({ ...p, [channel]: 'sent' }));
-    } catch { setNotifyStatus((p) => ({ ...p, [channel]: 'failed' })); }
   };
 
   const notifyLabel = (ch) => {
@@ -234,8 +164,6 @@ export default function EntryForm() {
     setPlate(''); setPhone(''); setDestId(''); setErrors({});
     setNearestSlot(null); setDupSession(null);
     setConfirmed(false); setBarrierOpen(false); setSession(null); setNotifyStatus({});
-    setAnprStatus('idle'); setAnprPlate('');
-    if (isDemoMode()) simulate();
   };
 
   const dest = destinations.find((d) => (d._id || d.id) === destId);
@@ -265,15 +193,6 @@ export default function EntryForm() {
               </div>
             )}
 
-            {/* Demo simulate button — only in demo mode when camera not used */}
-            {isDemoMode() && !confirmed && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-3)' }}>
-                <button className="btn btn-outline btn-sm" onClick={simulate}>
-                  Simulate ANPR (Demo)
-                </button>
-              </div>
-            )}
-
             {/* duplicate plate warning */}
             {dupSession && !confirmed && (
               <div className="alert alert-warning" style={{ marginBottom: 'var(--space-4)' }}>
@@ -289,29 +208,19 @@ export default function EntryForm() {
               </div>
             )}
 
-            {/* plate input + simulate (demo only) */}
+            {/* plate input */}
             <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
               <label className="form-label">Plate Number <span className="required">*</span></label>
-              <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  <input
-                    className={`input${errors.plate ? ' error' : ''}`}
-                    value={plate}
-                    onChange={handlePlateChange}
-                    onKeyDown={handlePlateKey}
-                    placeholder="e.g. UA 123B, UAA 123B, UG 1234, H4DF 001"
-                    disabled={confirmed}
-                    style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 700, letterSpacing: '0.1em' }}
-                  />
-                  {errors.plate && <div className="form-error">{errors.plate}</div>}
-                </div>
-                {/* only visible in demo mode */}
-                {isDemoMode() && (
-                  <button className="btn btn-outline btn-sm" style={{ marginTop: 2 }} onClick={simulate} disabled={confirmed}>
-                    Simulate
-                  </button>
-                )}
-              </div>
+              <input
+                className={`input${errors.plate ? ' error' : ''}`}
+                value={plate}
+                onChange={handlePlateChange}
+                onKeyDown={handlePlateKey}
+                placeholder="e.g. UA 123B, UAA 123B, UG 1234, H4DF 001"
+                disabled={confirmed}
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 700, letterSpacing: '0.1em' }}
+              />
+              {errors.plate && <div className="form-error">{errors.plate}</div>}
 
               {/* recent plates chips */}
               {recentPlates.length > 0 && !confirmed && (
@@ -321,13 +230,7 @@ export default function EntryForm() {
                     <button
                       key={p}
                       onClick={() => { setPlate(p); setErrors((e) => ({ ...e, plate: '' })); checkDuplicate(p); }}
-                      style={{
-                        padding: '2px 10px', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', fontWeight: 600,
-                        background: 'var(--gray-100)', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-full)',
-                        cursor: 'pointer', color: 'var(--gray-700)', transition: 'all var(--transition-fast)',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--brand-primary-lt)'; e.currentTarget.style.borderColor = 'var(--brand-primary)'; e.currentTarget.style.color = 'var(--brand-primary)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--gray-100)'; e.currentTarget.style.borderColor = 'var(--gray-200)'; e.currentTarget.style.color = 'var(--gray-700)'; }}
+                      style={{ padding: '2px 10px', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', fontWeight: 600, background: 'var(--gray-100)', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-full)', cursor: 'pointer', color: 'var(--gray-700)' }}
                     >
                       {p}
                     </button>
@@ -400,35 +303,12 @@ export default function EntryForm() {
                     </div>
                   ))}
                 </div>
-
                 <BarrierWidget open={barrierOpen} />
-
-                <div style={{ marginBottom: 'var(--space-3)' }}>
-                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--gray-700)', marginBottom: 'var(--space-3)' }}>Send slot number to driver:</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                    {['WHATSAPP', 'SMS'].map((ch) => (
-                      <button
-                        key={ch}
-                        className="btn btn-outline"
-                        disabled={notifyStatus[ch] === 'sending' || notifyStatus[ch] === 'sent'}
-                        onClick={() => sendNotify(ch)}
-                        style={{ flexDirection: 'column', height: 68, gap: 'var(--space-2)', borderColor: ch === 'WHATSAPP' && notifyStatus[ch] !== 'sent' ? '#25d366' : undefined, color: ch === 'WHATSAPP' && notifyStatus[ch] !== 'sent' ? '#25d366' : undefined }}
-                      >
-                        {ch === 'WHATSAPP'
-                          ? <svg viewBox="0 0 24 24" fill="#25d366" width="22" height="22"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
-                          : <svg viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" strokeWidth="2" width="22" height="22"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        }
-                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600 }}>{notifyLabel(ch)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </>
             )}
 
             {errors.submit && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-4)' }}>{errors.submit}</div>}
 
-            {/* actions */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
               {confirmed ? (
                 <button className="btn btn-primary btn-lg" onClick={reset}>

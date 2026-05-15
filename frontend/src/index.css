@@ -101,8 +101,8 @@
   --z-dropdown:100;
   --z-sticky:  200;
   --z-overlay: 300;
-  --z-modal:   400;
-  --z-toast:   500;
+  --z-modal:   2000;
+  --z-toast:   2100;
 }
 
 /* --- Reset --- */

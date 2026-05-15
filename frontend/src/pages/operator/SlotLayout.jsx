@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../lib/api';
-import { isDemoMode, demoSlots, demoDestinations, demoLandmarks, saveSlotPosition, applyPersistedPositions, clearSlotPositions } from '../../lib/demo';
 
 /* ── helpers ── */
 function haversine(la1, lo1, la2, lo2) {
@@ -64,24 +64,17 @@ function SlotMapLayer({ slots, destinations, landmarks, mode, onSlotClick, onMap
         const lat = parseFloat(ll.lat.toFixed(6));
         const lng = parseFloat(ll.lng.toFixed(6));
         /* persist position to database, then update React state */
-        if (isDemoMode()) {
-          saveSlotPosition(slot.slotId, lat, lng);
-          onSlotMoved(slot.slotId, lat, lng);
-          onToast('success', `Slot ${slot.slotId} moved`, `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-        } else {
-          api.patch(`/api/slots/${slot.slotId}`, { lat, lng })
-            .then(() => {
-              onSlotMoved(slot.slotId, lat, lng);
-              onToast('success', `Slot ${slot.slotId} moved`, `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-              console.log(`✅ Slot ${slot.slotId} position saved to DB: ${lat}, ${lng}`);
-            })
-            .catch((err) => {
-              /* revert marker to last known good position on failure */
-              marker.setLatLng([slot.lat, slot.lng]);
-              onToast('error', `Failed to save ${slot.slotId}`, 'Position not updated');
-              console.error(`❌ Failed to save slot ${slot.slotId}:`, err.response?.data || err.message);
-            });
-        }
+        api.patch(`/api/slots/${slot.slotId}`, { lat, lng })
+          .then(() => {
+            onSlotMoved(slot.slotId, lat, lng);
+            onToast('success', `Slot ${slot.slotId} moved`, `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+            console.log(`✅ Slot ${slot.slotId} position saved to DB: ${lat}, ${lng}`);
+          })
+          .catch((err) => {
+            marker.setLatLng([slot.lat, slot.lng]);
+            onToast('error', `Failed to save ${slot.slotId}`, 'Position not updated');
+            console.error(`❌ Failed to save slot ${slot.slotId}:`, err.response?.data || err.message);
+          });
       });
       markersRef.current[slot.slotId] = marker;
     });
@@ -116,7 +109,7 @@ function AddSlotModal({ latlng, destinations, slots, onSave, onCancel }) {
     onSave({ slotId: id, destinationId: destId || null, lat: parseFloat(latlng.lat.toFixed(6)), lng: parseFloat(latlng.lng.toFixed(6)) });
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal modal-sm">
         <div className="modal-header">
@@ -130,7 +123,7 @@ function AddSlotModal({ latlng, destinations, slots, onSave, onCancel }) {
             <label className="form-label">Slot ID <span className="required">*</span></label>
             <input className={`input${error ? ' error' : ''}`} value={slotId}
               onChange={(e) => { setSlotId(e.target.value.toUpperCase()); setError(''); }}
-              placeholder="e.g. F1" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }} />
+              placeholder="e.g. F1" autoFocus style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }} />
             {error && <div className="form-error">{error}</div>}
           </div>
           <div className="form-group" style={{ marginTop: 'var(--space-4)' }}>
@@ -149,7 +142,8 @@ function AddSlotModal({ latlng, destinations, slots, onSave, onCancel }) {
           <button className="btn btn-primary" onClick={handleSave}>Add Slot</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -158,7 +152,7 @@ function AddLandmarkModal({ latlng, onSave, onCancel }) {
   const [label, setLabel] = useState('');
   const [type,  setType]  = useState('DESTINATION_POI');
   const [error, setError] = useState('');
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal modal-sm">
         <div className="modal-header">
@@ -170,7 +164,7 @@ function AddLandmarkModal({ latlng, onSave, onCancel }) {
         <div className="modal-body">
           <div className="form-group">
             <label className="form-label">Label <span className="required">*</span></label>
-            <input className={`input${error ? ' error' : ''}`} value={label} onChange={(e) => { setLabel(e.target.value); setError(''); }} placeholder="e.g. Entry Gate" />
+            <input className={`input${error ? ' error' : ''}`} value={label} onChange={(e) => { setLabel(e.target.value); setError(''); }} placeholder="e.g. Entry Gate" autoFocus />
             {error && <div className="form-error">{error}</div>}
           </div>
           <div className="form-group" style={{ marginTop: 'var(--space-4)' }}>
@@ -190,20 +184,22 @@ function AddLandmarkModal({ latlng, onSave, onCancel }) {
           <button className="btn btn-primary" onClick={() => { if (!label.trim()) { setError('Label required.'); return; } onSave({ label: label.trim(), type, lat: parseFloat(latlng.lat.toFixed(6)), lng: parseFloat(latlng.lng.toFixed(6)) }); }}>Add Landmark</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 /* ── Confirm modal ── */
 function ConfirmModal({ title, text, onOk, onCancel }) {
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal modal-sm">
         <div className="modal-header"><div className="modal-title">{title}</div><button className="modal-close" onClick={onCancel}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
         <div className="modal-body"><p style={{ fontSize: 'var(--text-sm)', color: 'var(--gray-700)', lineHeight: 'var(--leading-relaxed)' }}>{text}</p></div>
         <div className="modal-footer"><button className="btn btn-outline-gray" onClick={onCancel}>Cancel</button><button className="btn btn-danger" onClick={onOk}>Confirm</button></div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -268,25 +264,15 @@ export default function SlotLayout() {
   const { toasts, add: toast } = useToast();
 
   const load = useCallback(async () => {
-    if (isDemoMode()) {
-      setSlots(applyPersistedPositions([...demoSlots]));
-      setDestinations([...demoDestinations]);
-      setLandmarks([...demoLandmarks]);
-      setLoading(false);
-      return;
-    }
     try {
-      /* Fetch slots independently — a missing destinations/landmarks endpoint
-         must NOT cause slots (and their saved positions) to be lost.        */
       const slotsRes = await api.get('/api/slots');
       setSlots(slotsRes.data);
 
-      /* Destinations and landmarks are optional — fail gracefully */
       try {
         const destRes = await api.get('/api/destinations');
         setDestinations(destRes.data);
       } catch {
-        setDestinations([...demoDestinations]);
+        setDestinations([]);
       }
 
       try {
@@ -295,13 +281,8 @@ export default function SlotLayout() {
       } catch {
         setLandmarks([]);
       }
-
     } catch (err) {
-      /* Only fall back to demo data if the slots fetch itself failed */
       console.error('Failed to load slots from backend:', err.message);
-      setSlots([...demoSlots]);
-      setDestinations([...demoDestinations]);
-      setLandmarks([]);
     } finally {
       setLoading(false);
     }
@@ -334,12 +315,8 @@ export default function SlotLayout() {
   const handleToggleOos = (slot) => {
     const doToggle = async () => {
       const newStatus = slot.status === 'OUT_OF_SERVICE' ? 'AVAILABLE' : 'OUT_OF_SERVICE';
-      if (isDemoMode()) {
-        slot.status = newStatus;
-      } else {
-        try { await api.patch(`/api/slots/${slot.slotId}`, { status: newStatus }); }
-        catch (err) { toast('error', 'Update failed', err.response?.data?.message || ''); return; }
-      }
+      try { await api.patch(`/api/slots/${slot.slotId}`, { status: newStatus }); }
+      catch (err) { toast('error', 'Update failed', err.response?.data?.message || ''); return; }
       toast(newStatus === 'AVAILABLE' ? 'success' : 'warning', `Slot ${slot.slotId}`, newStatus === 'AVAILABLE' ? 'Restored to service' : 'Marked out of service');
       setConfirm(null);
       setSlots((prev) => prev.map((s) => s.slotId === slot.slotId ? { ...s, status: newStatus } : s));
@@ -357,27 +334,20 @@ export default function SlotLayout() {
   }, []);
 
   const handleSaveSlot = async ({ slotId, destinationId, lat, lng }) => {
-    const newSlot = { _id: 's' + Date.now(), id: 's' + Date.now(), slotId, label: slotId, lat, lng, status: 'AVAILABLE', destinationId };
-    if (isDemoMode()) {
-      demoSlots.push(newSlot);
-    } else {
-      try { const { data } = await api.post('/api/slots', { slotId, label: slotId, lat, lng, destinationId }); newSlot._id = data._id; }
-      catch (err) { toast('error', 'Failed to add slot', err.response?.data?.message || ''); return; }
-    }
+    const newSlot = { slotId, label: slotId, lat, lng, status: 'AVAILABLE', destinationId };
+    try {
+      const { data } = await api.post('/api/slots', { slotId, label: slotId, lat, lng, destinationId });
+      newSlot._id = data._id;
+    } catch (err) { toast('error', 'Failed to add slot', err.response?.data?.message || ''); return; }
     setSlots((prev) => [...prev, newSlot]);
     setAddSlotData(null);
     toast('success', 'Slot added', slotId);
   };
 
   const handleSaveLandmark = async ({ label, type, lat, lng }) => {
-    const lm = { _id: 'lm' + Date.now(), label, type, lat, lng };
-    if (isDemoMode()) {
-      demoLandmarks.push(lm);
-    } else {
-      try { await api.post('/api/landmarks', { label, type, lat, lng }); }
-      catch (err) { toast('error', 'Failed to add landmark', err.response?.data?.message || ''); return; }
-    }
-    setLandmarks((prev) => [...prev, lm]);
+    try { await api.post('/api/landmarks', { label, type, lat, lng }); }
+    catch (err) { toast('error', 'Failed to add landmark', err.response?.data?.message || ''); return; }
+    setLandmarks((prev) => [...prev, { _id: 'lm' + Date.now(), label, type, lat, lng }]);
     setAddLmData(null);
     toast('success', 'Landmark added', label);
   };
@@ -434,7 +404,7 @@ export default function SlotLayout() {
           <span className="badge badge-oos">{oos} OOS</span>
           <button
             className="btn btn-outline-gray btn-sm"
-            onClick={() => { clearSlotPositions(); load(); toast('info', 'Positions reset', 'All slots returned to default positions.'); }}
+            onClick={() => { load(); toast('info', 'Positions reloaded', 'Slot positions refreshed from database.'); }}
             title="Reset all slot positions to defaults"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>

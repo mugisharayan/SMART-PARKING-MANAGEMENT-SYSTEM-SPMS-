@@ -3,7 +3,6 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import useAuthStore from '../../store/authStore';
 import api from '../../lib/api';
 import { io } from 'socket.io-client';
-import { isDemoMode, demoSlots, demoSessions } from '../../lib/demo';
 
 let _socket = null;
 
@@ -46,16 +45,14 @@ export default function AttendantLayout() {
   /* shift count — sessions created by this attendant today */
   useEffect(() => {
     if (!user) return;
-    if (isDemoMode()) {
+    api.get('/api/sessions?status=ACTIVE').then(({ data }) => {
       const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-      const count = demoSessions.filter(
-        (s) => (s.attendantId === user.id || s.attendantName === user.name) && new Date(s.entryTime) >= midnight
+      const list = Array.isArray(data) ? data : [];
+      const count = list.filter(
+        (s) => (s.attendantId === user.id || s.attendantName === user.name) &&
+               new Date(s.entryTime) >= midnight
       ).length;
       setShiftCount(count);
-      return;
-    }
-    api.get('/api/sessions?attendant=me&status=today').then(({ data }) => {
-      setShiftCount(Array.isArray(data) ? data.length : data.total || 0);
     }).catch(() => {});
   }, [user]);
 
@@ -74,7 +71,6 @@ export default function AttendantLayout() {
     const onFull = ({ full }) => setParkingFull(full);
     s.on('parking_full', onFull);
 
-    /* increment shift count when this attendant creates a session */
     const onSessionCreated = ({ session }) => {
       if (session?.attendantId === user?.id || session?.attendantName === user?.name) {
         setShiftCount((c) => c + 1);
@@ -82,15 +78,10 @@ export default function AttendantLayout() {
     };
     s.on('session_created', onSessionCreated);
 
-    if (isDemoMode()) {
-      const avail = demoSlots.filter((sl) => sl.status === 'AVAILABLE').length;
-      setParkingFull(avail === 0);
-      setConnected(true); // demo = always "connected"
-    } else {
-      api.get('/api/slots').then(({ data }) => {
-        setParkingFull(data.filter((sl) => sl.status === 'AVAILABLE').length === 0);
-      }).catch(() => {});
-    }
+    /* get initial parking full state from backend */
+    api.get('/api/slots').then(({ data }) => {
+      setParkingFull(data.filter((sl) => sl.status === 'AVAILABLE').length === 0);
+    }).catch(() => {});
 
     return () => {
       s.off('parking_full',    onFull);

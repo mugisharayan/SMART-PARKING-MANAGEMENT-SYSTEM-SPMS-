@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../lib/api';
 import { getOpSocket } from './OperatorLayout';
-import { isDemoMode, demoSearchSessions } from '../../lib/demo';
 
 function elapsed(entryTime) {
   const ms = Date.now() - new Date(entryTime).getTime();
@@ -32,15 +31,11 @@ export default function OperatorHistory() {
 
   const fetchSessions = useCallback(async (term = '') => {
     try {
-      if (isDemoMode()) { setSessions(demoSearchSessions(term)); return; }
       const params = term ? `?search=${encodeURIComponent(term)}` : '';
       const { data } = await api.get(`/api/sessions${params}`);
       setSessions(Array.isArray(data) ? data : data.sessions || []);
-    } catch {
-      setSessions(demoSearchSessions(term));
-    } finally {
-      setLoading(false);
-    }
+    } catch { setSessions([]); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);

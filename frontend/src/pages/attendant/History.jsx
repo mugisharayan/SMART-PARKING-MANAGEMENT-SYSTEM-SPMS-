@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import { getSocket } from './AttendantLayout';
-import { isDemoMode, demoSearchSessions } from '../../lib/demo';
 
 function elapsed(entryTime) {
   const ms = Date.now() - new Date(entryTime).getTime();
@@ -33,11 +32,10 @@ export default function AttendantHistory() {
 
   const fetchSessions = useCallback(async (term = '') => {
     try {
-      if (isDemoMode()) { setSessions(demoSearchSessions(term)); return; }
       const params = term ? `?search=${encodeURIComponent(term)}` : '';
       const { data } = await api.get(`/api/sessions${params}`);
       setSessions(Array.isArray(data) ? data : data.sessions || []);
-    } catch { setSessions(demoSearchSessions(term)); }
+    } catch { setSessions([]); }
     finally { setLoading(false); }
   }, []);
 

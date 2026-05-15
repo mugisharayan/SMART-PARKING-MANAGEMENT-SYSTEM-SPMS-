@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '../../lib/api';
 import { getOpSocket } from './OperatorLayout';
-import { isDemoMode, demoSlots, demoSessions, demoDestinations } from '../../lib/demo';
 
 function formatTime(d) {
   if (!d) return '—';
@@ -175,18 +174,6 @@ export default function Dashboard() {
 
   const load = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
-    const mn = new Date(); mn.setHours(0, 0, 0, 0);
-    if (isDemoMode()) {
-      const occupied  = demoSlots.filter((s) => s.status === 'OCCUPIED').length;
-      const available = demoSlots.filter((s) => s.status === 'AVAILABLE').length;
-      const oos       = demoSlots.filter((s) => s.status === 'OUT_OF_SERVICE').length;
-      setStats({ total: demoSlots.length, occupied, available, oos, totalToday: demoSessions.filter((s) => new Date(s.entryTime) >= mn).length });
-      setSlots([...demoSlots]);
-      setSessions([...demoSessions].sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime)));
-      setDests(demoDestinations);
-      setLoading(false);
-      return;
-    }
     try {
       const [slotsRes, sessRes, statsRes, destsRes] = await Promise.all([
         api.get('/api/slots'),
@@ -198,14 +185,8 @@ export default function Dashboard() {
       setSessions(Array.isArray(sessRes.data) ? sessRes.data : sessRes.data.sessions || []);
       setStats(statsRes.data);
       setDests(destsRes.data);
-    } catch {
-      const occupied  = demoSlots.filter((s) => s.status === 'OCCUPIED').length;
-      const available = demoSlots.filter((s) => s.status === 'AVAILABLE').length;
-      const oos       = demoSlots.filter((s) => s.status === 'OUT_OF_SERVICE').length;
-      setStats({ total: demoSlots.length, occupied, available, oos, totalToday: demoSessions.filter((s) => new Date(s.entryTime) >= mn).length });
-      setSlots([...demoSlots]);
-      setSessions([...demoSessions].sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime)));
-      setDests(demoDestinations);
+    } catch (err) {
+      console.error('Dashboard load failed:', err.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -358,6 +339,27 @@ export default function Dashboard() {
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
           </svg>
           {refreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
+        <button
+          className="btn btn-danger btn-sm"
+          onClick={async () => {
+            if (!window.confirm('This will permanently delete ALL slots, sessions and destinations from the database. Are you sure?')) return;
+            try {
+              const { data } = await api.delete('/api/admin/all');
+              alert(data.message);
+              load();
+            } catch (err) {
+              alert(err.response?.data?.message || 'Failed to clear database.');
+            }
+          }}
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6"/><path d="M14 11v6"/>
+          </svg>
+          Clear All Data
         </button>
       </div>
 

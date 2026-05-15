@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '../../lib/api';
-import { isDemoMode, demoDestinations, demoSessions, demoSlots } from '../../lib/demo';
 
 /* ── Confirm modal ── */
 function ConfirmModal({ title, text, onOk, onCancel }) {
@@ -238,13 +237,6 @@ export default function Destinations() {
   , [slots]);
 
   const load = useCallback(async () => {
-    if (isDemoMode()) {
-      setDestinations([...demoDestinations]);
-      setSessions(demoSessions.filter((s) => s.status === 'ACTIVE'));
-      setSlots([...demoSlots]);
-      setLoading(false);
-      return;
-    }
     try {
       const [destsRes, slotsRes, sessRes] = await Promise.all([
         api.get('/api/destinations'),
@@ -254,10 +246,8 @@ export default function Destinations() {
       setDestinations(destsRes.data);
       setSlots(slotsRes.data);
       setSessions(Array.isArray(sessRes.data) ? sessRes.data : sessRes.data.sessions || []);
-    } catch {
-      setDestinations([...demoDestinations]);
-      setSessions(demoSessions.filter((s) => s.status === 'ACTIVE'));
-      setSlots([...demoSlots]);
+    } catch (err) {
+      console.error('Destinations load failed:', err.message);
     } finally {
       setLoading(false);
     }
@@ -289,27 +279,14 @@ export default function Destinations() {
     setSaving(true);
     const payload = { name: form.name.trim(), anchorLat: parseFloat(form.anchorLat), anchorLng: parseFloat(form.anchorLng) };
     try {
-      if (isDemoMode()) {
-        if (editingId) {
-          const d = demoDestinations.find((x) => x._id === editingId || x.id === editingId);
-          if (d) { d.name = payload.name; d.anchorLat = payload.anchorLat; d.anchorLng = payload.anchorLng; }
-          toast('success', 'Destination updated', payload.name);
-        } else {
-          const nd = { _id: 'd' + Date.now(), id: 'd' + Date.now(), ...payload };
-          demoDestinations.push(nd);
-          toast('success', 'Destination added', payload.name);
-        }
-        await load();
+      if (editingId) {
+        await api.patch(`/api/destinations/${editingId}`, payload);
+        toast('success', 'Destination updated', payload.name);
       } else {
-        if (editingId) {
-          await api.patch(`/api/destinations/${editingId}`, payload);
-          toast('success', 'Destination updated', payload.name);
-        } else {
-          await api.post('/api/destinations', payload);
-          toast('success', 'Destination added', payload.name);
-        }
-        await load();
+        await api.post('/api/destinations', payload);
+        toast('success', 'Destination added', payload.name);
       }
+      await load();
       closeForm();
     } catch (err) {
       toast('error', 'Save failed', err.response?.data?.message || 'Please try again.');
@@ -324,12 +301,7 @@ export default function Destinations() {
     const active = activeSessions(id);
     const doDelete = async () => {
       try {
-        if (isDemoMode()) {
-          const idx = demoDestinations.findIndex((x) => x._id === id || x.id === id);
-          if (idx !== -1) demoDestinations.splice(idx, 1);
-        } else {
-          await api.delete(`/api/destinations/${id}`);
-        }
+        await api.delete(`/api/destinations/${id}`);
         toast('success', 'Destination removed', dest.name);
         await load();
       } catch (err) {

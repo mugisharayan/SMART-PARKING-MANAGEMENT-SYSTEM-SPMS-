@@ -6,7 +6,6 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../lib/api';
 import { getSocket } from './AttendantLayout';
-import { isDemoMode, demoSlots, demoSessions, applyPersistedPositions } from '../../lib/demo';
 
 /* ── helpers ── */
 function elapsed(entryTime) {
@@ -302,23 +301,16 @@ export default function LiveMap() {
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL'|'AVAILABLE'|'OCCUPIED'
   const mapRef = useRef(null);
 
-  /* ── fetch — demo fallback ── */
+  /* ── fetch from backend ── */
   useEffect(() => {
-    if (isDemoMode()) {
-      setSlots(applyPersistedPositions([...demoSlots]));
-      setSessions(demoSessions.filter((s) => s.status === 'ACTIVE'));
-      setLoading(false);
-      return;
-    }
     Promise.all([
       api.get('/api/slots'),
       api.get('/api/sessions?status=ACTIVE'),
     ]).then(([s, se]) => {
       setSlots(s.data);
       setSessions(Array.isArray(se.data) ? se.data : se.data.sessions || []);
-    }).catch(() => {
-      setSlots(applyPersistedPositions([...demoSlots]));
-      setSessions(demoSessions.filter((s) => s.status === 'ACTIVE'));
+    }).catch((err) => {
+      console.error('LiveMap load failed:', err.message);
     }).finally(() => setLoading(false));
   }, []);
 
