@@ -314,7 +314,7 @@ export default function Login() {
               textShadow:'0 2px 12px rgba(0,0,0,0.6), 0 4px 32px rgba(0,0,0,0.4)',
               animation:'slideInLeft 0.8s cubic-bezier(0.22,1,0.36,1) both',
               display:'block', whiteSpace:'nowrap',
-            }}>Intelligent Parking</span>
+            }}><span style={{ color:'#000000' }}>Intelligent</span> Parking</span>
             <span style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'nowrap' }}>
               <span style={{
                 fontSize:'clamp(2rem, 3.8vw, 3.2rem)', fontWeight:900,
