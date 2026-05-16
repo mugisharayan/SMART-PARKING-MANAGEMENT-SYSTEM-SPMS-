@@ -70,12 +70,12 @@ const CYCLING_WORDS = ['Simple...', 'Easy...', 'Quick...'];
 
 const CAR_SVG = (
   <svg width="72" height="34" viewBox="0 0 48 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="6" y="8" width="36" height="11" rx="3" fill="#1a56db" opacity="0.9"/>
-    <path d="M12 8 L16 2 H32 L36 8Z" fill="#60a5fa" opacity="0.85"/>
-    <circle cx="14" cy="20" r="3" fill="#fff" opacity="0.9"/>
-    <circle cx="34" cy="20" r="3" fill="#fff" opacity="0.9"/>
-    <rect x="34" y="10" width="6" height="4" rx="1" fill="#fff" opacity="0.4"/>
-    <rect x="8" y="10" width="5" height="3" rx="1" fill="#93c5fd" opacity="0.6"/>
+    <rect x="6" y="8" width="36" height="11" rx="3" fill="#111111" opacity="0.95"/>
+    <path d="M12 8 L16 2 H32 L36 8Z" fill="#333333" opacity="0.9"/>
+    <circle cx="14" cy="20" r="3" fill="#555555" opacity="0.9"/>
+    <circle cx="34" cy="20" r="3" fill="#555555" opacity="0.9"/>
+    <rect x="34" y="10" width="6" height="4" rx="1" fill="#888888" opacity="0.5"/>
+    <rect x="8" y="10" width="5" height="3" rx="1" fill="#aaaaaa" opacity="0.6"/>
   </svg>
 );
 
@@ -320,9 +320,7 @@ export default function Login() {
                 fontSize:'clamp(2rem, 3.8vw, 3.2rem)', fontWeight:900,
                 fontFamily:'"Plus Jakarta Sans", "Inter", system-ui, sans-serif',
                 letterSpacing:'-0.03em',
-                background:'linear-gradient(90deg, #60a5fa 0%, #93c5fd 45%, #3b82f6 75%, #60a5fa 100%)',
-                WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
-                filter:'drop-shadow(0 2px 6px rgba(96,165,250,0.35))',
+                color:'#000000',
                 animation:'slideInLeft 0.8s 0.2s cubic-bezier(0.22,1,0.36,1) both',
                 whiteSpace:'nowrap',
               }}>Made</span>
