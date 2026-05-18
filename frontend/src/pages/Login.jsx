@@ -244,9 +244,9 @@ export default function Login() {
         src={pngwingImg}
         alt=""
         style={{
-          position:'fixed', top:'20%', left:'20%',
-          width:'60%', height:'60%',
-          objectFit:'cover',
+          position:'fixed', top:'10%', left:'15%',
+          width:'70%', height:'70%',
+          objectFit:'contain',
           zIndex:3,
           opacity:1,
           pointerEvents:'none',

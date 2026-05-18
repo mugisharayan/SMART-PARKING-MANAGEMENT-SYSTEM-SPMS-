@@ -1,0 +1,32 @@
+services:
+  # ── Backend: Node/Express Web Service ──────────────────────────────────────
+  - type: web
+    name: lugogo-pms-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGO_URI
+        sync: false          # set this manually in the Render dashboard
+      - key: PLATE_RECOGNIZER_TOKEN
+        sync: false          # set this manually in the Render dashboard
+
+  # ── Frontend: React Static Site ────────────────────────────────────────────
+  - type: web
+    name: lugogo-pms-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: REACT_APP_API_URL
+        sync: false          # set this to your backend Render URL
