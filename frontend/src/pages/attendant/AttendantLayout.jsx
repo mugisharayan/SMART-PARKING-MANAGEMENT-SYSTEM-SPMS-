@@ -167,31 +167,77 @@ export default function AttendantLayout() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="sidebar-user">
-            <div className="sidebar-avatar">{initials}</div>
-            <div className="sidebar-user-info">
-              <div className="sidebar-user-name">{user?.name}</div>
-              {/* shift summary */}
-              <div className="sidebar-user-role" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span
-                  title={connected ? 'Live — connected' : 'Reconnecting...'}
-                  style={{
-                    width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                    background: connected ? 'var(--color-available)' : 'var(--color-warning)',
-                    animation: connected ? 'pulse-dot 2s ease-in-out infinite' : 'none',
-                  }}
-                />
-                {shiftCount} entr{shiftCount === 1 ? 'y' : 'ies'} today
+          {/* User info card */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 12px',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 12,
+            marginBottom: 10,
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+              background: 'linear-gradient(135deg, #1a56db, #0ea5e9)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '0.8rem', fontWeight: 800, color: '#fff',
+              boxShadow: '0 0 0 2px rgba(96,165,250,0.3)',
+            }}>{initials}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: '0.78rem', fontWeight: 700, color: '#fff',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>{user?.name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                  background: connected ? '#4ade80' : '#f59e0b',
+                  boxShadow: connected ? '0 0 6px #4ade80' : '0 0 6px #f59e0b',
+                  animation: connected ? 'pulse-dot 2s ease-in-out infinite' : 'none',
+                }} />
+                <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)' }}>
+                  {shiftCount} entr{shiftCount === 1 ? 'y' : 'ies'} today
+                </span>
               </div>
             </div>
-            <button className="btn-ghost btn-icon btn-sm" onClick={handleLogout} title="Logout">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                <polyline points="16 17 21 12 16 7"/>
-                <line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-            </button>
           </div>
+
+          {/* Logout button — full width, clearly visible */}
+          <button
+            onClick={handleLogout}
+            style={{
+              width: '100%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '10px 16px',
+              background: 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(220,38,38,0.1))',
+              border: '1px solid rgba(239,68,68,0.35)',
+              borderRadius: 10,
+              color: '#fca5a5',
+              fontSize: '0.8rem', fontWeight: 700,
+              cursor: 'pointer',
+              letterSpacing: '0.04em',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(239,68,68,0.3), rgba(220,38,38,0.25))';
+              e.currentTarget.style.borderColor = 'rgba(239,68,68,0.6)';
+              e.currentTarget.style.color = '#fff';
+              e.currentTarget.style.boxShadow = '0 4px 16px rgba(239,68,68,0.25)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(220,38,38,0.1))';
+              e.currentTarget.style.borderColor = 'rgba(239,68,68,0.35)';
+              e.currentTarget.style.color = '#fca5a5';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign Out
+          </button>
         </div>
       </aside>
 

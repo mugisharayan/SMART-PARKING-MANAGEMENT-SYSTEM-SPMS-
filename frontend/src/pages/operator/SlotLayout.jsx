@@ -96,9 +96,9 @@ function SlotMapLayer({ slots, destinations, landmarks, mode, onSlotClick, onMap
 }
 
 /* ── Add Slot Modal ── */
-function AddSlotModal({ latlng, destinations, slots, onSave, onCancel }) {
+function AddSlotModal({ latlng, destinations, slots, onSave, onCancel, preselectedDestId }) {
   const [slotId,  setSlotId]  = useState('');
-  const [destId,  setDestId]  = useState('');
+  const [destId,  setDestId]  = useState(preselectedDestId || '');
   const [error,   setError]   = useState('');
 
   const handleSave = () => {
@@ -133,6 +133,12 @@ function AddSlotModal({ latlng, destinations, slots, onSave, onCancel }) {
               <option value="">None</option>
               {destinations.map((d) => <option key={d._id || d.id} value={d._id || d.id}>{d.name}</option>)}
             </select>
+            {preselectedDestId && (
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-available)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                Zone pre-selected from your click location
+              </div>
+            )}
           </div>
           <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--gray-500)', fontFamily: 'var(--font-mono)' }}>
             GPS: {latlng.lat.toFixed(6)}, {latlng.lng.toFixed(6)}
@@ -333,9 +339,9 @@ export default function SlotLayout() {
   }, []);
 
   const handleMapClick = useCallback((latlng, clickMode) => {
-    if (clickMode === 'add')      setAddSlotData({ latlng });
+    if (clickMode === 'add')      setAddSlotData({ latlng, destinationId: zoneFilter !== 'ALL' ? zoneFilter : null });
     if (clickMode === 'landmark') setAddLmData({ latlng });
-  }, []);
+  }, [zoneFilter]);
 
   const handleToggleOos = useCallback((slot) => {
     const doToggle = async () => {
@@ -402,7 +408,7 @@ export default function SlotLayout() {
   const exportCSV = () => {
     const headers = ['Slot ID', 'Zone', 'Status', 'Latitude', 'Longitude'];
     const rows = slots.map((slot) => {
-      const dest = destinations.find((d) => (d._id || d.id) === slot.destinationId);
+      const dest = destinations.find((d) => (d._id || d.id)?.toString() === slot.destinationId?.toString());
       return [
         slot.slotId,
         dest ? dest.name : 'No Zone',
@@ -435,7 +441,7 @@ export default function SlotLayout() {
     <div className="page-content">
       <ToastContainer toasts={toasts} />
       {confirm    && <ConfirmModal {...confirm} onCancel={() => setConfirm(null)} />}
-      {addSlotData && <AddSlotModal latlng={addSlotData.latlng} destinations={destinations} slots={slots} onSave={handleSaveSlot} onCancel={() => setAddSlotData(null)} />}
+      {addSlotData && <AddSlotModal latlng={addSlotData.latlng} destinations={destinations} slots={slots} onSave={handleSaveSlot} onCancel={() => setAddSlotData(null)} preselectedDestId={addSlotData.destinationId} />}
       {addLmData   && <AddLandmarkModal latlng={addLmData.latlng} onSave={handleSaveLandmark} onCancel={() => setAddLmData(null)} />}
 
       <div className="page-subtitle" style={{ marginBottom: 'var(--space-5)' }}>Click the map to place slots. Drag markers to reposition.</div>
@@ -750,9 +756,9 @@ export default function SlotLayout() {
                 All ({slots.length})
               </button>
               {destinations.map((d) => {
-                const id       = d._id || d.id;
-                const count    = slots.filter((s) => s.destinationId === id).length;
-                const zoneOcc  = slots.filter((s) => s.destinationId === id && s.status === 'OCCUPIED').length;
+                const id       = (d._id || d.id).toString();
+                const count    = slots.filter((s) => s.destinationId?.toString() === id).length;
+                const zoneOcc  = slots.filter((s) => s.destinationId?.toString() === id && s.status === 'OCCUPIED').length;
                 const zonePct  = count ? (zoneOcc / count) : 0;
                 const dotColor = zonePct > 0.8 ? 'var(--color-occupied)' : zonePct > 0.5 ? 'var(--color-warning)' : 'var(--color-available)';
                 const isActive = zoneFilter === id;
@@ -788,14 +794,14 @@ export default function SlotLayout() {
                 /* group slots by destination */
                 const groups = {};
                 slots.forEach((slot) => {
-                  const dest = destinations.find((d) => (d._id || d.id) === slot.destinationId);
-                  const key  = dest ? (dest._id || dest.id) : 'none';
+                  const dest = destinations.find((d) => (d._id || d.id)?.toString() === slot.destinationId?.toString());
+                  const key  = dest ? (dest._id || dest.id).toString() : 'none';
                   const name = dest ? dest.name : 'No Zone';
                   if (!groups[key]) groups[key] = { name, slots: [] };
                   groups[key].slots.push(slot);
                 });
                 return Object.entries(groups)
-                  .filter(([key]) => zoneFilter === 'ALL' || key === zoneFilter)
+                  .filter(([key]) => zoneFilter === 'ALL' || key === zoneFilter.toString())
                   .map(([key, group]) => {
                     /* apply search filter within each group */
                     const t = search.toLowerCase();
@@ -831,6 +837,35 @@ export default function SlotLayout() {
                                     {group.name}
                                     <span style={{ fontWeight: 400, color: 'var(--gray-400)' }}>({filteredSlots.length} slot{filteredSlots.length !== 1 ? 's' : ''})</span>
                                   </span>
+                                  {/* Add slot directly to this zone */}
+                                  {key !== 'none' && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Use map center as placeholder coords; operator can drag the pin after
+                                        const center = mapRef.current ? mapRef.current.getCenter() : { lat: 0.326689, lng: 32.606920 };
+                                        setAddSlotData({ latlng: { lat: center.lat, lng: center.lng }, destinationId: key });
+                                      }}
+                                      style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                                        padding: '2px 8px', borderRadius: 6,
+                                        background: 'rgba(26,86,219,0.1)',
+                                        border: '1px solid rgba(26,86,219,0.25)',
+                                        color: 'var(--brand-primary)',
+                                        fontSize: '0.65rem', fontWeight: 700,
+                                        cursor: 'pointer', letterSpacing: '0.03em',
+                                        transition: 'all 0.15s ease',
+                                      }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(26,86,219,0.2)'; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(26,86,219,0.1)'; }}
+                                      title={`Add slot to ${group.name}`}
+                                    >
+                                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                                      </svg>
+                                      Add Slot
+                                    </button>
+                                  )}
                                   {/* occupancy progress bar */}
                                   {(() => {
                                     const pct      = zoneTotal ? Math.round((zoneOcc / zoneTotal) * 100) : 0;

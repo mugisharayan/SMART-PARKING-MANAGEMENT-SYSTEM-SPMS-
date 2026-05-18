@@ -39,7 +39,12 @@ router.get('/nearest', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const slots = await Slot.find().sort({ slotId: 1 });
-    res.json(slots);
+    // Normalize destinationId to string so frontend comparisons work reliably
+    const normalized = slots.map((s) => ({
+      ...s.toObject(),
+      destinationId: s.destinationId ? s.destinationId.toString() : null,
+    }));
+    res.json(normalized);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -68,10 +73,10 @@ router.post('/', async (req, res) => {
       label: label || slotId,
       lat,
       lng,
-      destinationId: destinationId || null,
+      destinationId: destinationId ? destinationId.toString() : null,
       status: status || 'AVAILABLE',
     });
-    res.status(201).json(slot);
+    res.status(201).json({ ...slot.toObject(), destinationId: slot.destinationId ? slot.destinationId.toString() : null });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
