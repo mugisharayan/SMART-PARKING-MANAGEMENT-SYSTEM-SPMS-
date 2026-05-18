@@ -187,6 +187,8 @@ export default function Dashboard() {
       setDests(destsRes.data);
     } catch (err) {
       console.error('Dashboard load failed:', err.message);
+      // Fallback so the page renders instead of crashing
+      setStats((prev) => prev ?? { total: 0, occupied: 0, available: 0, oos: 0, totalToday: 0 });
     } finally {
       setLoading(false);
       setRefreshing(false);
