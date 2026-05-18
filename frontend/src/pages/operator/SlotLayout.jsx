@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../lib/api';
+import { getOpSocket } from './OperatorLayout';
 
 /* ── helpers ── */
 function haversine(la1, lo1, la2, lo2) {
@@ -225,6 +226,13 @@ function ToastContainer({ toasts }) {
   ) : null;
 }
 
+/* ── Map instance ref capture ── */
+function MapRefCapture({ mapRef }) {
+  const map = useMap();
+  useEffect(() => { mapRef.current = map; }, [map, mapRef]);
+  return null;
+}
+
 /* ── Reset view control ── */
 function ResetViewControl() {
   const map = useMap();
@@ -259,8 +267,11 @@ export default function SlotLayout() {
   const [addSlotData,  setAddSlotData]  = useState(null);
   const [addLmData,    setAddLmData]    = useState(null);
   const [confirm,      setConfirm]      = useState(null);
-  const [zoneFilter,   setZoneFilter]   = useState('ALL');  // S1: zone filter
-  const [collapsed,    setCollapsed]    = useState({});     // S1: collapsed zone groups
+  const [zoneFilter,   setZoneFilter]   = useState('ALL');
+  const [collapsed,    setCollapsed]    = useState({});
+  const [search,       setSearch]       = useState('');
+  const [fullscreen, setFullscreen] = useState(false);
+  const mapRef = useRef(null);
   const { toasts, add: toast } = useToast();
 
   const load = useCallback(async () => {
@@ -290,10 +301,57 @@ export default function SlotLayout() {
 
   useEffect(() => { load(); }, [load]);
 
+  /* ── Socket live updates — slot statuses stay fresh without refresh ── */
+  useEffect(() => {
+    const s = getOpSocket();
+
+    /* slot_updated — operator marked OOS/restored from another tab or dashboard */
+    const onSlotUpdated = ({ slotId, status }) => {
+      setSlots((prev) => prev.map((sl) => sl.slotId === slotId ? { ...sl, status } : sl));
+    };
+
+    /* session_created — attendant checked a vehicle in, slot becomes OCCUPIED */
+    const onSessionCreated = ({ session }) => {
+      if (!session?.slotId) return;
+      setSlots((prev) => prev.map((sl) => sl.slotId === session.slotId ? { ...sl, status: 'OCCUPIED' } : sl));
+    };
+
+    /* session_closed — vehicle exited, slot becomes AVAILABLE */
+    const onSessionClosed = ({ slotId }) => {
+      if (!slotId) return;
+      setSlots((prev) => prev.map((sl) => sl.slotId === slotId ? { ...sl, status: 'AVAILABLE' } : sl));
+    };
+
+    s.on('slot_updated',    onSlotUpdated);
+    s.on('session_created', onSessionCreated);
+    s.on('session_closed',  onSessionClosed);
+    return () => {
+      s.off('slot_updated',    onSlotUpdated);
+      s.off('session_created', onSessionCreated);
+      s.off('session_closed',  onSessionClosed);
+    };
+  }, []);
+
   const handleMapClick = useCallback((latlng, clickMode) => {
     if (clickMode === 'add')      setAddSlotData({ latlng });
     if (clickMode === 'landmark') setAddLmData({ latlng });
   }, []);
+
+  const handleToggleOos = useCallback((slot) => {
+    const doToggle = async () => {
+      const newStatus = slot.status === 'OUT_OF_SERVICE' ? 'AVAILABLE' : 'OUT_OF_SERVICE';
+      try { await api.patch(`/api/slots/${slot.slotId}`, { status: newStatus }); }
+      catch (err) { toast('error', 'Update failed', err.response?.data?.message || ''); return; }
+      toast(newStatus === 'AVAILABLE' ? 'success' : 'warning', `Slot ${slot.slotId}`, newStatus === 'AVAILABLE' ? 'Restored to service' : 'Marked out of service');
+      setConfirm(null);
+      setSlots((prev) => prev.map((s) => s.slotId === slot.slotId ? { ...s, status: newStatus } : s));
+    };
+    if (slot.status === 'OCCUPIED') {
+      setConfirm({ title: 'Slot Has Active Session', text: `Slot ${slot.slotId} has an active session. Mark it out of service anyway?`, onOk: doToggle });
+    } else {
+      doToggle();
+    }
+  }, [toast]);
 
   const handleSlotClick = useCallback((slot, marker) => {
     const isOos = slot.status === 'OUT_OF_SERVICE';
@@ -310,24 +368,7 @@ export default function SlotLayout() {
       const btn = document.getElementById(`oos-btn-${slot.slotId}`);
       if (btn) btn.onclick = () => { marker.closePopup(); handleToggleOos(slot); };
     }, 50);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleToggleOos = (slot) => {
-    const doToggle = async () => {
-      const newStatus = slot.status === 'OUT_OF_SERVICE' ? 'AVAILABLE' : 'OUT_OF_SERVICE';
-      try { await api.patch(`/api/slots/${slot.slotId}`, { status: newStatus }); }
-      catch (err) { toast('error', 'Update failed', err.response?.data?.message || ''); return; }
-      toast(newStatus === 'AVAILABLE' ? 'success' : 'warning', `Slot ${slot.slotId}`, newStatus === 'AVAILABLE' ? 'Restored to service' : 'Marked out of service');
-      setConfirm(null);
-      setSlots((prev) => prev.map((s) => s.slotId === slot.slotId ? { ...s, status: newStatus } : s));
-    };
-
-    if (slot.status === 'OCCUPIED') {
-      setConfirm({ title: 'Slot Has Active Session', text: `Slot ${slot.slotId} has an active session. Mark it out of service anyway?`, onOk: doToggle });
-    } else {
-      doToggle();
-    }
-  };
+  }, [handleToggleOos]);
 
   const handleSlotMoved = useCallback((slotId, lat, lng) => {
     setSlots((prev) => prev.map((s) => s.slotId === slotId ? { ...s, lat, lng } : s));
@@ -352,6 +393,34 @@ export default function SlotLayout() {
     toast('success', 'Landmark added', label);
   };
 
+  const handleLocateSlot = useCallback((slot) => {
+    if (!mapRef.current) return;
+    mapRef.current.flyTo([slot.lat, slot.lng], 20, { animate: true, duration: 0.8 });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const exportCSV = () => {
+    const headers = ['Slot ID', 'Zone', 'Status', 'Latitude', 'Longitude'];
+    const rows = slots.map((slot) => {
+      const dest = destinations.find((d) => (d._id || d.id) === slot.destinationId);
+      return [
+        slot.slotId,
+        dest ? dest.name : 'No Zone',
+        slot.status,
+        Number(slot.lat).toFixed(6),
+        Number(slot.lng).toFixed(6),
+      ].join(',');
+    });
+    const csv  = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `slot-layout-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const modeButtons = [
     { key: 'view',     label: 'View',         icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> },
     { key: 'add',      label: 'Add Slot',     icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> },
@@ -369,55 +438,195 @@ export default function SlotLayout() {
       {addSlotData && <AddSlotModal latlng={addSlotData.latlng} destinations={destinations} slots={slots} onSave={handleSaveSlot} onCancel={() => setAddSlotData(null)} />}
       {addLmData   && <AddLandmarkModal latlng={addLmData.latlng} onSave={handleSaveLandmark} onCancel={() => setAddLmData(null)} />}
 
-      <div className="page-header">
-        <div className="page-title">Slot Layout Management</div>
-        <div className="page-subtitle">Click the map to place slots. Drag markers to reposition.</div>
+      <div className="page-subtitle" style={{ marginBottom: 'var(--space-5)' }}>Click the map to place slots. Drag markers to reposition.</div>
+
+      {/* ── Stat Cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+        {[
+          {
+            label: 'Total Slots',
+            value: slots.length,
+            color: 'var(--brand-primary)',
+            bg:    'var(--brand-primary-lt)',
+            delta: `${destinations.length} zone${destinations.length !== 1 ? 's' : ''} configured`,
+            icon: (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Available',
+            value: available,
+            color: 'var(--color-available)',
+            bg:    'var(--color-available-lt)',
+            delta: slots.length ? `${Math.round((available / slots.length) * 100)}% of total` : '—',
+            icon: (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Occupied',
+            value: occupied,
+            color: 'var(--color-occupied)',
+            bg:    'var(--color-occupied-lt)',
+            delta: slots.length ? `${Math.round((occupied / slots.length) * 100)}% occupancy rate` : '—',
+            icon: (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                <path d="M16 8h4l3 3v5h-7V8z"/>
+                <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Out of Service',
+            value: oos,
+            color: 'var(--color-oos)',
+            bg:    'var(--color-oos-lt)',
+            delta: oos > 0 ? `${oos} slot${oos !== 1 ? 's' : ''} need attention` : 'All slots operational',
+            icon: (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+              </svg>
+            ),
+          },
+        ].map(({ label, value, color, bg, delta, icon }) => (
+          <div key={label} style={{
+            background: 'var(--surface-card)',
+            border: '1px solid var(--gray-200)',
+            borderRadius: 'var(--radius-xl)',
+            boxShadow: 'var(--shadow-card)',
+            overflow: 'hidden',
+            position: 'relative',
+          }}>
+            <div style={{ height: 4, background: color }} />
+            <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: bg, color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  {icon}
+                </div>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--gray-600)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+              </div>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 900, color: 'var(--gray-900)', marginBottom: 6, lineHeight: 1 }}>{value}</div>
+              {/* occupancy progress bar on Occupied card */}
+              {label === 'Occupied' && slots.length > 0 && (
+                <div style={{ height: 4, background: 'var(--gray-100)', borderRadius: 'var(--radius-full)', overflow: 'hidden', marginBottom: 6 }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${Math.round((occupied / slots.length) * 100)}%`,
+                    background: occupied / slots.length > 0.8 ? 'var(--color-occupied)' : occupied / slots.length > 0.5 ? 'var(--color-warning)' : 'var(--color-available)',
+                    borderRadius: 'var(--radius-full)',
+                    transition: 'width 0.6s ease',
+                  }} />
+                </div>
+              )}
+              <div style={{ fontSize: '0.7rem', color: 'var(--gray-500)', fontWeight: 500 }}>{delta}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
-        {/* mode pill buttons */}
-        <div style={{ display: 'flex', background: 'var(--gray-100)', borderRadius: 'var(--radius-md)', padding: 3, gap: 2 }}>
-          {modeButtons.map(({ key, label, icon }) => (
-            <button key={key} onClick={() => setMode(key)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
-                background: mode === key ? 'var(--surface-card)' : 'transparent',
-                color: mode === key ? 'var(--brand-primary)' : 'var(--gray-500)',
-                fontWeight: mode === key ? 700 : 500, fontSize: 'var(--text-sm)',
-                boxShadow: mode === key ? 'var(--shadow-xs)' : 'none',
-                transition: 'all var(--transition-fast)',
-              }}>
-              {icon}{label}
-            </button>
-          ))}
+      {/* ── Toolbar ── */}
+      <div style={{ marginBottom: 'var(--space-4)' }}>
+        {/* Row 1: Mode switcher + hint */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-3)', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', background: 'var(--gray-100)', borderRadius: 'var(--radius-md)', padding: 3, gap: 2 }}>
+            {modeButtons.map(({ key, label, icon }) => {
+              const activeColors = {
+                view:     { bg: 'var(--brand-primary)',   text: '#fff' },
+                add:      { bg: 'var(--color-available)', text: '#fff' },
+                landmark: { bg: 'var(--color-warning)',   text: '#fff' },
+              };
+              const isActive = mode === key;
+              return (
+                <button key={key} onClick={() => setMode(key)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                    padding: '7px 16px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+                    background: isActive ? activeColors[key].bg : 'transparent',
+                    color: isActive ? activeColors[key].text : 'var(--gray-500)',
+                    fontWeight: isActive ? 700 : 500, fontSize: 'var(--text-sm)',
+                    boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
+                    transition: 'all var(--transition-fast)',
+                  }}>
+                  {icon}{label}
+                </button>
+              );
+            })}
+          </div>
+          {/* animated hint badge */}
+          {mode !== 'view' && (
+            <span style={{
+              fontSize: 'var(--text-xs)', fontWeight: 600,
+              color:      mode === 'add' ? 'var(--color-available)' : 'var(--color-warning)',
+              background: mode === 'add' ? 'var(--color-available-lt)' : 'var(--color-warning-lt)',
+              padding: '5px 12px', borderRadius: 'var(--radius-full)',
+              display: 'flex', alignItems: 'center', gap: 6,
+              animation: 'slideDown 0.25s ease',
+              border: `1px solid ${mode === 'add' ? 'var(--color-available)' : 'var(--color-warning)'}`,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                {mode === 'add'
+                  ? <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>
+                  : <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></>
+                }
+              </svg>
+              {mode === 'add' ? 'Click map to place a slot' : 'Click map to place a landmark'}
+            </span>
+          )}
         </div>
-        {mode !== 'view' && (
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-primary)', fontWeight: 600, background: 'var(--brand-primary-lt)', padding: '4px 10px', borderRadius: 'var(--radius-full)' }}>
-            {mode === 'add' ? 'Click map to place a slot' : 'Click map to place a landmark'}
+        {/* Row 2: Badges + Reset */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <span className="badge badge-available" style={{ padding: '4px 10px' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-available)', display: 'inline-block', marginRight: 4 }} />
+            {available} Available
           </span>
-        )}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-          <span className="badge badge-available">{available} Available</span>
-          <span className="badge badge-occupied">{occupied} Occupied</span>
-          <span className="badge badge-oos">{oos} OOS</span>
-          <button
-            className="btn btn-outline-gray btn-sm"
-            onClick={() => { load(); toast('info', 'Positions reloaded', 'Slot positions refreshed from database.'); }}
-            title="Reset all slot positions to defaults"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
-            Reset Positions
-          </button>
+          <span className="badge badge-occupied" style={{ padding: '4px 10px' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-occupied)', display: 'inline-block', marginRight: 4 }} />
+            {occupied} Occupied
+          </span>
+          <span className="badge badge-oos" style={{ padding: '4px 10px' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-oos)', display: 'inline-block', marginRight: 4 }} />
+            {oos} OOS
+          </span>
+          <div style={{ marginLeft: 'auto' }}>
+            <button
+              className="btn btn-outline-gray btn-sm"
+              onClick={() => { load(); toast('info', 'Positions reloaded', 'Slot positions refreshed from database.'); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/>
+              </svg>
+              Refresh Slots
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Map */}
       {loading ? (
-        <div className="skeleton" style={{ height: 420, borderRadius: 'var(--radius-xl)' }} />
+        <div className="skeleton" style={{ height: 500, borderRadius: 'var(--radius-xl)' }} />
       ) : (
-        <div style={{ height: 420, borderRadius: 'var(--radius-xl)', overflow: 'hidden', border: '1px solid var(--gray-200)', position: 'relative' }}>
+        <div style={{
+          height: fullscreen ? '80vh' : 500,
+          borderRadius: 'var(--radius-xl)',
+          overflow: 'hidden',
+          border: '1px solid var(--gray-200)',
+          position: 'relative',
+          transition: 'height 0.4s cubic-bezier(0.4,0,0.2,1)',
+          boxShadow: fullscreen ? 'var(--shadow-xl)' : 'var(--shadow-card)',
+        }}>
           <MapContainer center={[0.326689, 32.606920]} zoom={18} zoomControl style={{ height: '100%', width: '100%' }}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" maxZoom={21} />
             <SlotMapLayer
@@ -431,7 +640,62 @@ export default function SlotLayout() {
               onToast={toast}
             />
             <ResetViewControl />
+            <MapRefCapture mapRef={mapRef} />
           </MapContainer>
+
+          {/* fullscreen toggle */}
+          <button
+            onClick={() => setFullscreen((f) => !f)}
+            style={{
+              position: 'absolute', top: 'var(--space-3)', left: 'var(--space-3)', zIndex: 10,
+              background: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(10px)',
+              border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius-md)',
+              padding: '6px 10px', fontSize: 'var(--text-xs)', fontWeight: 600,
+              color: 'var(--gray-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              boxShadow: 'var(--shadow-sm)', transition: 'all var(--transition-fast)',
+            }}
+            title={fullscreen ? 'Exit fullscreen' : 'Expand map'}
+          >
+            {fullscreen ? (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+                <path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
+                <path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+              </svg>
+            )}
+            {fullscreen ? 'Exit Fullscreen' : 'Expand Map'}
+          </button>
+
+          {/* map legend */}
+          <div style={{
+            position: 'absolute', bottom: 'var(--space-3)', left: 'var(--space-3)',
+            zIndex: 10, background: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(10px)',
+            borderRadius: 'var(--radius-lg)', padding: '8px 12px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
+            display: 'flex', flexDirection: 'column', gap: 5,
+            fontSize: 'var(--text-xs)', fontWeight: 600,
+            pointerEvents: 'none',
+          }}>
+            <div style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--gray-400)', marginBottom: 2 }}>Legend</div>
+            {[
+              { color: '#16a34a', label: 'Available', shadow: 'rgba(22,163,74,.45)' },
+              { color: '#dc2626', label: 'Occupied',  shadow: 'rgba(220,38,38,.45)' },
+              { color: '#6b7280', label: 'Out of Service', shadow: 'rgba(107,114,128,.35)' },
+            ].map(({ color, label, shadow }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <svg width="10" height="13" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg" style={{ filter: `drop-shadow(0 1px 2px ${shadow})`, flexShrink: 0 }}>
+                  <path d="M14,2 C8.477,2 4,6.477 4,12 C4,19.5 14,34 14,34 C14,34 24,19.5 24,12 C24,6.477 19.523,2 14,2 Z" fill={color} stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/>
+                  <circle cx="14" cy="12" r="5" fill="rgba(255,255,255,0.25)"/>
+                </svg>
+                <span style={{ color: 'var(--gray-700)' }}>{label}</span>
+              </div>
+            ))}
+          </div>
+
           {/* floating slot count pill */}
           <div style={{
             position: 'absolute', bottom: 'var(--space-3)', left: '50%', transform: 'translateX(-50%)',
@@ -452,27 +716,69 @@ export default function SlotLayout() {
       {/* Slots table — grouped by zone with filter pills */}
       <div className="card" style={{ marginTop: 'var(--space-4)' }}>
         <div className="card-header">
-          <div className="card-title">All Slots</div>
-          {/* zone filter pills */}
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => setZoneFilter('ALL')}
-              className={`btn btn-sm ${zoneFilter === 'ALL' ? 'btn-primary' : 'btn-outline-gray'}`}
-            >All</button>
-            {destinations.map((d) => (
-              <button
-                key={d._id || d.id}
-                onClick={() => setZoneFilter(d._id || d.id)}
-                className={`btn btn-sm ${zoneFilter === (d._id || d.id) ? 'btn-primary' : 'btn-outline-gray'}`}
-              >{d.name.split(' ')[0]}</button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <div className="card-title">All Slots</div>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-400)', fontWeight: 500 }}>
+              {slots.length} total
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+            {/* search */}
+            <div className="search-input-wrapper" style={{ maxWidth: 220 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                className="search-input"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search slot or zone..."
+              />
+            </div>
+            {/* export */}
+            <button className="btn btn-outline-gray btn-sm" onClick={exportCSV} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Export CSV
+            </button>
+            {/* zone filter pills */}
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              <button onClick={() => setZoneFilter('ALL')} className={`btn btn-sm ${zoneFilter === 'ALL' ? 'btn-primary' : 'btn-outline-gray'}`}>
+                All ({slots.length})
+              </button>
+              {destinations.map((d) => {
+                const id       = d._id || d.id;
+                const count    = slots.filter((s) => s.destinationId === id).length;
+                const zoneOcc  = slots.filter((s) => s.destinationId === id && s.status === 'OCCUPIED').length;
+                const zonePct  = count ? (zoneOcc / count) : 0;
+                const dotColor = zonePct > 0.8 ? 'var(--color-occupied)' : zonePct > 0.5 ? 'var(--color-warning)' : 'var(--color-available)';
+                const isActive = zoneFilter === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setZoneFilter(id)}
+                    className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-outline-gray'}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+                  >
+                    <span style={{
+                      width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                      background: isActive ? 'rgba(255,255,255,0.8)' : dotColor,
+                      boxShadow: isActive ? 'none' : `0 0 0 2px ${dotColor}30`,
+                    }} />
+                    {d.name.split(' ')[0]} ({count})
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
         <div className="table-wrapper" style={{ border: 'none', boxShadow: 'none' }}>
           <table>
             <thead>
               <tr>
-                <th></th>
                 <th>Slot ID</th><th>Zone</th><th>Latitude</th><th>Longitude</th><th>Status</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
@@ -491,36 +797,94 @@ export default function SlotLayout() {
                 return Object.entries(groups)
                   .filter(([key]) => zoneFilter === 'ALL' || key === zoneFilter)
                   .map(([key, group]) => {
+                    /* apply search filter within each group */
+                    const t = search.toLowerCase();
+                    const filteredSlots = search
+                      ? group.slots.filter((s) =>
+                          s.slotId.toLowerCase().includes(t) ||
+                          group.name.toLowerCase().includes(t)
+                        )
+                      : group.slots;
+                    if (filteredSlots.length === 0) return null;
                     const isCollapsed = collapsed[key];
                     return (
                       <Fragment key={key}>
                         {/* zone header row */}
-                        <tr style={{ background: 'var(--gray-50)', cursor: 'pointer' }}
-                          onClick={() => setCollapsed((p) => ({ ...p, [key]: !p[key] }))}
-                        >
-                          <td colSpan={7} style={{ padding: 'var(--space-2) var(--space-4)', fontWeight: 700, fontSize: 'var(--text-xs)', color: 'var(--gray-600)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                {isCollapsed ? <polyline points="9 18 15 12 9 6"/> : <polyline points="6 9 12 15 18 9"/>}
-                              </svg>
-                              {group.name} <span style={{ fontWeight: 400, color: 'var(--gray-400)' }}>({group.slots.length} slots)</span>
-                            </span>
-                          </td>
-                        </tr>
+                        {(() => {
+                          const zoneOcc   = group.slots.filter((s) => s.status === 'OCCUPIED').length;
+                          const zoneTotal = group.slots.length;
+                          const zonePct   = zoneTotal ? (zoneOcc / zoneTotal) : 0;
+                          const borderColor = zonePct > 0.8 ? 'var(--color-occupied)' : zonePct > 0.5 ? 'var(--color-warning)' : 'var(--color-available)';
+                          const bgTint      = zonePct > 0.8 ? 'rgba(220,38,38,0.04)' : zonePct > 0.5 ? 'rgba(217,119,6,0.04)' : 'rgba(22,163,74,0.04)';
+                          return (
+                            <tr
+                              style={{ background: bgTint, cursor: 'pointer', borderLeft: `4px solid ${borderColor}` }}
+                              onClick={() => setCollapsed((p) => ({ ...p, [key]: !p[key] }))}
+                            >
+                              <td colSpan={6} style={{ padding: 'var(--space-2) var(--space-4)', fontWeight: 700, fontSize: 'var(--text-xs)', color: 'var(--gray-600)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                  {/* chevron + name */}
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      {isCollapsed ? <polyline points="9 18 15 12 9 6"/> : <polyline points="6 9 12 15 18 9"/>}
+                                    </svg>
+                                    {group.name}
+                                    <span style={{ fontWeight: 400, color: 'var(--gray-400)' }}>({filteredSlots.length} slot{filteredSlots.length !== 1 ? 's' : ''})</span>
+                                  </span>
+                                  {/* occupancy progress bar */}
+                                  {(() => {
+                                    const pct      = zoneTotal ? Math.round((zoneOcc / zoneTotal) * 100) : 0;
+                                    const barColor = zonePct > 0.8 ? 'var(--color-occupied)' : zonePct > 0.5 ? 'var(--color-warning)' : 'var(--color-available)';
+                                    return (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flex: 1, maxWidth: 180 }}>
+                                        <div style={{ flex: 1, height: 5, background: 'var(--gray-200)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                                          <div style={{
+                                            height: '100%', width: `${pct}%`,
+                                            background: barColor, borderRadius: 'var(--radius-full)',
+                                            transition: 'width 0.6s ease',
+                                          }} />
+                                        </div>
+                                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: barColor, minWidth: 32 }}>{pct}%</span>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })()}
                         {/* slot rows */}
-                        {!isCollapsed && group.slots.map((slot) => (
-                          <tr key={slot.slotId}>
-                            <td style={{ width: 32 }} />
+                        {!isCollapsed && filteredSlots.map((slot) => (
+                          <tr key={slot.slotId} style={{
+                            borderLeft: `3px solid ${
+                              slot.status === 'AVAILABLE' ? 'var(--color-available)'
+                              : slot.status === 'OCCUPIED' ? 'var(--color-occupied)'
+                              : 'var(--color-oos)'
+                            }`,
+                          }}>
                             <td className="td-slot">{slot.slotId}</td>
                             <td style={{ fontSize: 'var(--text-xs)' }}>{group.name}</td>
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{Number(slot.lat).toFixed(6)}</td>
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{Number(slot.lng).toFixed(6)}</td>
                             <td><span className={`badge ${slot.status === 'AVAILABLE' ? 'badge-available' : slot.status === 'OCCUPIED' ? 'badge-occupied' : 'badge-oos'}`}>{slot.status}</span></td>
                             <td style={{ textAlign: 'right' }}>
-                              <button
-                                className={`btn btn-sm ${slot.status === 'OUT_OF_SERVICE' ? 'btn-success' : 'btn-warning'}`}
-                                onClick={() => handleToggleOos(slot)}
-                              >{slot.status === 'OUT_OF_SERVICE' ? 'Restore' : 'Mark OOS'}</button>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+                                <button
+                                  className="btn btn-outline-gray btn-sm"
+                                  onClick={() => handleLocateSlot(slot)}
+                                  title="Locate on map"
+                                  style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                                >
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                                  </svg>
+                                  Locate
+                                </button>
+                                <button
+                                  className={`btn btn-sm ${slot.status === 'OUT_OF_SERVICE' ? 'btn-success' : 'btn-warning'}`}
+                                  onClick={() => handleToggleOos(slot)}
+                                >{slot.status === 'OUT_OF_SERVICE' ? 'Restore' : 'Mark OOS'}</button>
+                              </div>
                             </td>
                           </tr>
                         ))}
